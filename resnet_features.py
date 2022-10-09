@@ -124,10 +124,12 @@ class ResNet_features(nn.Module):
     the average pooling and final fully convolutional layer is removed
     '''
 
-    def __init__(self, block, layers, num_classes=1000, zero_init_residual=False):
+    def __init__(self, block, layers, num_classes=1000, zero_init_residual=False, last_layer_num: int = -1):
         super(ResNet_features, self).__init__()
 
         self.inplanes = 64
+        self.last_layer_num = last_layer_num
+        assert self.last_layer_num != 0
 
         # the first convolutional layer before the structured sequence of blocks
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
@@ -143,10 +145,17 @@ class ResNet_features(nn.Module):
         # the following layers, each layer is a sequence of blocks
         self.block = block
         self.layers = layers
+
         self.layer1 = self._make_layer(block=block, planes=64, num_blocks=self.layers[0])
-        self.layer2 = self._make_layer(block=block, planes=128, num_blocks=self.layers[1], stride=2)
-        self.layer3 = self._make_layer(block=block, planes=256, num_blocks=self.layers[2], stride=2)
-        self.layer4 = self._make_layer(block=block, planes=512, num_blocks=self.layers[3], stride=2)
+
+        if self.last_layer_num == -1 or self.last_layer_num >= 2:
+            self.layer2 = self._make_layer(block=block, planes=128, num_blocks=self.layers[1], stride=2)
+
+        if self.last_layer_num == -1 or self.last_layer_num >= 3:
+            self.layer3 = self._make_layer(block=block, planes=256, num_blocks=self.layers[2], stride=2)
+
+        if self.last_layer_num == -1 or self.last_layer_num >= 4:
+            self.layer4 = self._make_layer(block=block, planes=512, num_blocks=self.layers[3], stride=2)
 
         # initialize the parameters
         for m in self.modules():
@@ -198,9 +207,15 @@ class ResNet_features(nn.Module):
         x = self.maxpool(x)
 
         x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)
+
+        if hasattr(self, 'layer2'):
+            x = self.layer2(x)
+
+        if hasattr(self, 'layer3'):
+            x = self.layer3(x)
+
+        if hasattr(self, 'layer4'):
+            x = self.layer4(x)
 
         return x
 

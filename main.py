@@ -20,24 +20,30 @@ from log import create_logger
 from preprocess import mean, std, preprocess_input_function
 
 parser = argparse.ArgumentParser()
+parser.add_argument('--experiment_run', type=str, default='001')
 parser.add_argument('-gpuid', nargs=1, type=str, default='0') # python3 main.py -gpuid=0,1,2,3
+parser.add_argument('--last_layer_num', type=int, default=-1)
 args = parser.parse_args()
 os.environ['CUDA_VISIBLE_DEVICES'] = args.gpuid[0]
 print(os.environ['CUDA_VISIBLE_DEVICES'])
 
 # book keeping namings and code
 from settings import base_architecture, img_size, prototype_shape, num_classes, \
-                     prototype_activation_function, add_on_layers_type, experiment_run
+                     prototype_activation_function, add_on_layers_type
 
 base_architecture_type = re.match('^[a-z]*', base_architecture).group(0)
 
-model_dir = './saved_models/' + base_architecture + '/' + experiment_run + '/'
+model_dir = './saved_models/' + base_architecture + '/' + args.experiment_run + '/'
 makedir(model_dir)
 shutil.copy(src=os.path.join(os.getcwd(), __file__), dst=model_dir)
 shutil.copy(src=os.path.join(os.getcwd(), 'settings.py'), dst=model_dir)
 shutil.copy(src=os.path.join(os.getcwd(), base_architecture_type + '_features.py'), dst=model_dir)
 shutil.copy(src=os.path.join(os.getcwd(), 'model.py'), dst=model_dir)
 shutil.copy(src=os.path.join(os.getcwd(), 'train_and_test.py'), dst=model_dir)
+
+with open(os.path.join(model_dir, 'last_layer_num.txt'), 'w') as f:
+    f.write(str(args.last_layer_num))
+
 
 log, logclose = create_logger(log_filename=os.path.join(model_dir, 'train.log'))
 img_dir = os.path.join(model_dir, 'img')
@@ -100,7 +106,8 @@ ppnet = model.construct_PPNet(base_architecture=base_architecture,
                               prototype_shape=prototype_shape,
                               num_classes=num_classes,
                               prototype_activation_function=prototype_activation_function,
-                              add_on_layers_type=add_on_layers_type)
+                              add_on_layers_type=add_on_layers_type,
+                              last_layer_num=args.last_layer_num)
 #if prototype_activation_function == 'linear':
 #    ppnet.set_last_layer_incorrect_connection(incorrect_strength=0)
 ppnet = ppnet.cuda()
