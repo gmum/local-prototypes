@@ -102,8 +102,8 @@ if check_test_accu:
         num_workers=4, pin_memory=False)
     log('test set size: {0}'.format(len(test_loader.dataset)))
 
-    accu = tnt.test(model=ppnet_multi, dataloader=test_loader,
-                    class_specific=class_specific, log=print)
+    accu, _ = tnt.test(model=ppnet_multi, dataloader=test_loader,
+                       class_specific=class_specific, log=print)
 
 ##### SANITY CHECK
 # confirm prototype class identity

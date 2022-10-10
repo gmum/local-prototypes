@@ -125,12 +125,12 @@ prune.prune_prototypes(dataloader=train_push_loader,
                        #model_name=None,
                        log=log,
                        copy_prototype_imgs=True)
-accu = tnt.test(model=ppnet_multi, dataloader=test_loader,
-                class_specific=class_specific, log=log)
+accu, _ = tnt.test(model=ppnet_multi, dataloader=test_loader,
+                   class_specific=class_specific, log=log)
 save.save_model_w_condition(model=ppnet, model_dir=model_dir,
-                            model_name=original_model_name.split('push')[0] + 'prune',
+                            model_name=original_model_name.split('push')[0] + '_prune',
                             accu=accu,
-                            target_accu=0.70, log=log)
+                            target_accu=0.10, log=log)
 
 # last layer optimization
 if optimize_last_layer:
@@ -148,13 +148,18 @@ if optimize_last_layer:
     tnt.last_only(model=ppnet_multi, log=log)
     for i in range(100):
         log('iteration: \t{0}'.format(i))
-        _ = tnt.train(model=ppnet_multi, dataloader=train_loader, optimizer=last_layer_optimizer,
-                      class_specific=class_specific, coefs=coefs, log=log)
-        accu = tnt.test(model=ppnet_multi, dataloader=test_loader,
-                        class_specific=class_specific, log=log)
+        train_accu, _ = tnt.train(model=ppnet_multi, dataloader=train_loader, optimizer=last_layer_optimizer,
+                                  class_specific=class_specific, coefs=coefs, log=log)
+        accu, _ = tnt.test(model=ppnet_multi, dataloader=test_loader,
+                           class_specific=class_specific, log=log)
         save.save_model_w_condition(model=ppnet, model_dir=model_dir,
-                                    model_name=original_model_name.split('push')[0] + '_' + str(i) + 'prune',
+                                    model_name=original_model_name.split('push')[0] + '_' + str(i) + '_prune',
                                     accu=accu,
-                                    target_accu=0.70, log=log)
+                                    target_accu=0.10, log=log)
+
+    save.save_model_w_condition(model=ppnet, model_dir=model_dir,
+                                model_name=original_model_name.split('push')[0] + '_prune_last',
+                                accu=accu,
+                                target_accu=0.10, log=log)
 
 logclose()

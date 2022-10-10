@@ -121,7 +121,9 @@ def _train_or_test(model, dataloader, optimizer=None, class_specific=True, use_l
         p_avg_pair_dist = torch.mean(list_of_distances(p, p))
     log('\tp dist pair: \t{0}'.format(p_avg_pair_dist.item()))
 
-    return n_correct / n_examples
+    converged = total_cluster_cost < total_separation_cost
+
+    return n_correct / n_examples, converged
 
 
 def train(model, dataloader, optimizer, class_specific=False, coefs=None, log=print):

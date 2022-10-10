@@ -149,18 +149,21 @@ for epoch in range(num_train_epochs):
 
     if epoch < num_warm_epochs:
         tnt.warm_only(model=ppnet_multi, log=log)
-        _ = tnt.train(model=ppnet_multi, dataloader=train_loader, optimizer=warm_optimizer,
-                      class_specific=class_specific, coefs=coefs, log=log)
+        train_accu, converged = tnt.train(model=ppnet_multi, dataloader=train_loader, optimizer=warm_optimizer,
+                                          class_specific=class_specific, coefs=coefs, log=log)
     else:
         tnt.joint(model=ppnet_multi, log=log)
         joint_lr_scheduler.step()
-        _ = tnt.train(model=ppnet_multi, dataloader=train_loader, optimizer=joint_optimizer,
-                      class_specific=class_specific, coefs=coefs, log=log)
+        train_accu, converged = tnt.train(model=ppnet_multi, dataloader=train_loader, optimizer=joint_optimizer,
+                                          class_specific=class_specific, coefs=coefs, log=log)
 
-    accu = tnt.test(model=ppnet_multi, dataloader=test_loader,
+    accu, _ = tnt.test(model=ppnet_multi, dataloader=test_loader,
                     class_specific=class_specific, log=log)
-    save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name=str(epoch) + 'nopush', accu=accu,
-                                target_accu=0.70, log=log)
+    save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name=str(epoch) + '_nopush', accu=accu,
+                                target_accu=0.10, log=log)
+
+    save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name='nopush_last', accu=accu,
+                                target_accu=0.10, log=log)
 
     if epoch >= push_start and epoch in push_epochs:
         push.push_prototypes(
@@ -176,21 +179,33 @@ for epoch in range(num_train_epochs):
             proto_bound_boxes_filename_prefix=proto_bound_boxes_filename_prefix,
             save_prototype_class_identity=True,
             log=log)
-        accu = tnt.test(model=ppnet_multi, dataloader=test_loader,
-                        class_specific=class_specific, log=log)
-        save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name=str(epoch) + 'push', accu=accu,
-                                    target_accu=0.70, log=log)
+        accu, _ = tnt.test(model=ppnet_multi, dataloader=test_loader,
+                           class_specific=class_specific, log=log)
+        save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name=str(epoch) + '_push', accu=accu,
+                                    target_accu=0.10, log=log)
+        save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name='push_last', accu=accu,
+                                    target_accu=0.10, log=log)
 
         if prototype_activation_function != 'linear':
             tnt.last_only(model=ppnet_multi, log=log)
             for i in range(20):
                 log('iteration: \t{0}'.format(i))
-                _ = tnt.train(model=ppnet_multi, dataloader=train_loader, optimizer=last_layer_optimizer,
-                              class_specific=class_specific, coefs=coefs, log=log)
-                accu = tnt.test(model=ppnet_multi, dataloader=test_loader,
-                                class_specific=class_specific, log=log)
-                save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name=str(epoch) + '_' + str(i) + 'push', accu=accu,
-                                            target_accu=0.70, log=log)
-   
+                train_accu, converged = tnt.train(model=ppnet_multi, dataloader=train_loader,
+                                                  optimizer=last_layer_optimizer, class_specific=class_specific,
+                                                  coefs=coefs, log=log)
+                accu, _ = tnt.test(model=ppnet_multi, dataloader=test_loader,
+                                   class_specific=class_specific, log=log)
+                # save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name=str(epoch) + '_' + str(i) + 'push', accu=accu,
+                                            # target_accu=0.30, log=log)
+
+            save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name=str(epoch) + '_push_finetune',
+                                        accu=accu, target_accu=0.10, log=log)
+            save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name='_push_finetune_last', accu=accu,
+                                        target_accu=0.10, log=log)
+
+        if train_accu > 0.99 and converged:
+            print("EARLY STOPPING")
+            break
+
 logclose()
 
