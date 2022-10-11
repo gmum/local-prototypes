@@ -32,8 +32,8 @@ from settings import base_architecture, img_size, prototype_shape, num_classes, 
                      prototype_activation_function, add_on_layers_type
 
 base_architecture_type = re.match('^[a-z]*', base_architecture).group(0)
+model_dir = '/shared/results/sacha/local_prototypes/' + base_architecture + '/' + args.experiment_run + '/'
 
-model_dir = './saved_models/' + base_architecture + '/' + args.experiment_run + '/'
 makedir(model_dir)
 shutil.copy(src=os.path.join(os.getcwd(), __file__), dst=model_dir)
 shutil.copy(src=os.path.join(os.getcwd(), 'settings.py'), dst=model_dir)
@@ -200,7 +200,7 @@ for epoch in range(num_train_epochs):
 
             save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name=str(epoch) + '_push_finetune',
                                         accu=accu, target_accu=0.10, log=log)
-            save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name='_push_finetune_last', accu=accu,
+            save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name='push_finetune_last', accu=accu,
                                         target_accu=0.10, log=log)
 
         if train_accu > 0.99 and converged:

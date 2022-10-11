@@ -1,7 +1,6 @@
 import os
 import shutil
 
-import torch
 import torch.utils.data
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
@@ -9,8 +8,6 @@ import torchvision.datasets as datasets
 import argparse
 
 from helpers import makedir
-import model
-import push
 import prune
 import train_and_test as tnt
 import save
@@ -21,6 +18,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-gpuid', nargs=1, type=str, default='0')
 parser.add_argument('-modeldir', nargs=1, type=str)
 parser.add_argument('-model', nargs=1, type=str)
+parser.add_argument('-epoch', type=int)
 args = parser.parse_args()
 os.environ['CUDA_VISIBLE_DEVICES'] = args.gpuid[0]
 
@@ -33,21 +31,15 @@ prune_threshold = 3
 
 original_model_dir = args.modeldir[0] #'./saved_models/densenet161/003/'
 original_model_name = args.model[0] #'10_16push0.8007.pth'
+epoch_number = args.epoch
 
 need_push = ('nopush' in original_model_name)
 if need_push:
     assert(False) # pruning must happen after push
-else:
-    epoch = original_model_name.split('push')[0]
 
-if '_' in epoch:
-    epoch = int(epoch.split('_')[0])
-else:
-    epoch = int(epoch)
+model_dir = os.path.join(original_model_dir, 'pruned_prototypes_k{}_pt{}'.format(
+    k, prune_threshold))
 
-model_dir = os.path.join(original_model_dir, 'pruned_prototypes_epoch{}_k{}_pt{}'.format(epoch,
-                                          k,
-                                          prune_threshold))
 makedir(model_dir)
 shutil.copy(src=os.path.join(os.getcwd(), __file__), dst=model_dir)
 
@@ -121,7 +113,7 @@ prune.prune_prototypes(dataloader=train_push_loader,
                        prune_threshold=prune_threshold,
                        preprocess_input_function=preprocess_input_function, # normalize
                        original_model_dir=original_model_dir,
-                       epoch_number=epoch,
+                       epoch_number=epoch_number,
                        #model_name=None,
                        log=log,
                        copy_prototype_imgs=True)
