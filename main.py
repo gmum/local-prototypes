@@ -203,7 +203,7 @@ for epoch in range(num_train_epochs):
             save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name='push_finetune_last', accu=accu,
                                         target_accu=0.10, log=log)
 
-        if train_accu > 0.99 and converged:
+        if train_accu > 0.99 and converged and epoch > 20:
             print("EARLY STOPPING")
             break
 

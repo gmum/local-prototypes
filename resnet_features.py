@@ -124,11 +124,13 @@ class ResNet_features(nn.Module):
     the average pooling and final fully convolutional layer is removed
     '''
 
-    def __init__(self, block, layers, num_classes=1000, zero_init_residual=False, last_layer_num: int = -1):
+    def __init__(self, block, layers, num_classes=1000, zero_init_residual=False, last_layer_num: int = -1,
+                 return_prev_layer=False):
         super(ResNet_features, self).__init__()
 
         self.inplanes = 64
         self.last_layer_num = last_layer_num
+        self.return_prev_layer = return_prev_layer
         assert self.last_layer_num != 0
 
         # the first convolutional layer before the structured sequence of blocks
@@ -206,16 +208,23 @@ class ResNet_features(nn.Module):
         x = self.relu(x)
         x = self.maxpool(x)
 
+        prev_x = x
         x = self.layer1(x)
 
         if hasattr(self, 'layer2'):
+            prev_x = x
             x = self.layer2(x)
 
         if hasattr(self, 'layer3'):
+            prev_x = x
             x = self.layer3(x)
 
         if hasattr(self, 'layer4'):
+            prev_x = x
             x = self.layer4(x)
+
+        if self.return_prev_layer:
+            return prev_x, x
 
         return x
 

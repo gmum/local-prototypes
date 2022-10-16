@@ -5,6 +5,7 @@ import torch.nn.functional as F
 
 from resnet_features import resnet18_features, resnet34_features, resnet50_features, resnet101_features, resnet152_features
 from densenet_features import densenet121_features, densenet161_features, densenet169_features, densenet201_features
+from settings import use_last_two_blocks
 from vgg_features import vgg11_features, vgg11_bn_features, vgg13_features, vgg13_bn_features, vgg16_features, vgg16_bn_features,\
                          vgg19_features, vgg19_bn_features
 
@@ -33,13 +34,15 @@ class PPNet(nn.Module):
     def __init__(self, features, img_size, prototype_shape,
                  proto_layer_rf_info, num_classes, init_weights=True,
                  prototype_activation_function='log',
-                 add_on_layers_type='bottleneck'):
+                 add_on_layers_type='bottleneck',
+                 return_prev_layer=False):
 
         super(PPNet, self).__init__()
         self.img_size = img_size
         self.prototype_shape = prototype_shape
         self.num_prototypes = prototype_shape[0]
         self.num_classes = num_classes
+        self.return_prev_layer = return_prev_layer
         self.epsilon = 1e-4
         
         # prototype_activation_function could be 'log', 'linear',
@@ -121,8 +124,12 @@ class PPNet(nn.Module):
         the feature input to prototype layer
         '''
         x = self.features(x)
-        x = self.add_on_layers(x)
-        return x
+        if self.return_prev_layer:
+            x1 = self.add_on_layers(x[0])
+            x2 = self.add_on_layers(x[1])
+            return x1, x2
+        else:
+            return self.add_on_layers(x)
 
     @staticmethod
     def _weighted_l2_convolution(input, filter, weights):
@@ -175,8 +182,13 @@ class PPNet(nn.Module):
         x is the raw input
         '''
         conv_features = self.conv_features(x)
-        distances = self._l2_convolution(conv_features)
-        return distances
+        if self.return_prev_layer:
+            distances1 = self._l2_convolution(conv_features[0])
+            distances2 = self._l2_convolution(conv_features[1])
+            return distances1, distances2
+        else:
+            distances = self._l2_convolution(conv_features)
+            return distances
 
     def distance_2_similarity(self, distances):
         if self.prototype_activation_function == 'log':
@@ -184,10 +196,16 @@ class PPNet(nn.Module):
         elif self.prototype_activation_function == 'linear':
             return -distances
         else:
-            return self.prototype_activation_function(distances)
+            raise ValueError(f'Unknown prototype_activation_function: {self.prototype_activation_function}')
 
     def forward(self, x):
         distances = self.prototype_distances(x)
+
+        if self.return_prev_layer:
+            distances1, distances2 = distances
+            print(distances1.shape, distances2.shape)
+            # TODO distances = distances1
+
         '''
         we cannot refactor the lines below for similarity scores
         because we need to return min_distances
@@ -196,6 +214,7 @@ class PPNet(nn.Module):
         min_distances = -F.max_pool2d(-distances,
                                       kernel_size=(distances.size()[2],
                                                    distances.size()[3]))
+        print(min_distances.shape)
         min_distances = min_distances.view(-1, self.num_prototypes)
         prototype_activations = self.distance_2_similarity(min_distances)
         logits = self.last_layer(prototype_activations)
@@ -290,7 +309,8 @@ def construct_PPNet(base_architecture, pretrained=True, img_size=224,
                     prototype_activation_function='log',
                     add_on_layers_type='bottleneck',
                     last_layer_num: int = -1):
-    features = base_architecture_to_features[base_architecture](pretrained=pretrained, last_layer_num=last_layer_num)
+    features = base_architecture_to_features[base_architecture](pretrained=pretrained, last_layer_num=last_layer_num,
+                                                                return_prev_layer=use_last_two_blocks)
     layer_filter_sizes, layer_strides, layer_paddings = features.conv_info()
 
     proto_layer_rf_info = compute_proto_layer_rf_info_v2(img_size=img_size,
@@ -306,5 +326,6 @@ def construct_PPNet(base_architecture, pretrained=True, img_size=224,
                  num_classes=num_classes,
                  init_weights=True,
                  prototype_activation_function=prototype_activation_function,
-                 add_on_layers_type=add_on_layers_type)
+                 add_on_layers_type=add_on_layers_type,
+                 return_prev_layer=use_last_two_blocks)
 
