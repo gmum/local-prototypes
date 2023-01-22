@@ -11,7 +11,7 @@ use_last_two_blocks = False
 num_workers = 4
 
 # on GMUM
-data_path = '/shared/sets/datasets/'
+data_path = '/shared/sets/datasets/birds'
 train_dir = data_path + 'train_birds_augmented/train_birds_augmented/train_birds_augmented/'
 test_dir = data_path + 'test_birds/test_birds/test_birds/'
 train_push_dir = data_path + 'train_birds/train_birds/train_birds/'
@@ -43,8 +43,8 @@ coefs = {
     'clst': 0.8,
     'sep': -0.08,
     'l1': 1e-4,
-    'sim_diff_random': os.environ.get('SIM_DIFF', 1),
-    'sim_diff_high_act': os.environ.get('SIM_DIFF', 10)
+    'sim_diff_random': float(os.environ.get('SIM_DIFF', 1)),
+    'sim_diff_high_act': float(os.environ.get('SIM_DIFF', 10))
 }
 
 num_train_epochs = 1000
