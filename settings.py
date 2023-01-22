@@ -6,7 +6,7 @@ prototype_shape = (2000, 128, 1, 1)
 num_classes = 200
 prototype_activation_function = 'log'
 add_on_layers_type = 'regular'
-use_last_two_blocks = True
+use_last_two_blocks = False
 
 num_workers = 4
 
@@ -24,8 +24,7 @@ results_dir = '/shared/results/sacha/local_prototypes/'
 # train_push_dir = data_path + 'train_birds/train_birds/train_birds/'
 # results_dir = '/media/mikolaj/HDD/local_prototypes'
 
-# train_batch_size = 80
-train_batch_size = 40  # 2x smaller than the original 80 because of the additional activation loss
+train_batch_size = 80
 test_batch_size = 100
 train_push_batch_size = 75
 

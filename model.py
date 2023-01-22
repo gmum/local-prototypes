@@ -203,8 +203,6 @@ class PPNet(nn.Module):
 
         if self.return_prev_layer:
             distances1, distances2 = distances
-            print(distances1.shape, distances2.shape)
-            # TODO distances = distances1
 
         '''
         we cannot refactor the lines below for similarity scores
@@ -214,7 +212,6 @@ class PPNet(nn.Module):
         min_distances = -F.max_pool2d(-distances,
                                       kernel_size=(distances.size()[2],
                                                    distances.size()[3]))
-        print(min_distances.shape)
         min_distances = min_distances.view(-1, self.num_prototypes)
         prototype_activations = self.distance_2_similarity(min_distances)
         logits = self.last_layer(prototype_activations)
