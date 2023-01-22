@@ -186,7 +186,7 @@ class PPNet(nn.Module):
         else:
             return self.prototype_activation_function(distances)
 
-    def forward(self, x):
+    def forward(self, x, return_all_similarities=False):
         distances = self.prototype_distances(x)
         '''
         we cannot refactor the lines below for similarity scores
@@ -199,6 +199,10 @@ class PPNet(nn.Module):
         min_distances = min_distances.view(-1, self.num_prototypes)
         prototype_activations = self.distance_2_similarity(min_distances)
         logits = self.last_layer(prototype_activations)
+
+        if return_all_similarities:
+            return logits, min_distances, self.distance_2_similarity(distances)
+
         return logits, min_distances
 
     def push_forward(self, x):

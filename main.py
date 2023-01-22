@@ -13,7 +13,6 @@ import re
 from helpers import makedir
 import model
 import push
-import prune
 import train_and_test as tnt
 import save
 from log import create_logger
@@ -23,16 +22,18 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--experiment_run', type=str, default='001')
 parser.add_argument('-gpuid', nargs=1, type=str, default='0') # python3 main.py -gpuid=0,1,2,3
 parser.add_argument('--last_layer_num', type=int, default=-1)
+parser.add_argument('--masking_type', type=str, default='none')
+
 args = parser.parse_args()
 os.environ['CUDA_VISIBLE_DEVICES'] = args.gpuid[0]
 print(os.environ['CUDA_VISIBLE_DEVICES'])
 
 # book keeping namings and code
 from settings import base_architecture, img_size, prototype_shape, num_classes, \
-                     prototype_activation_function, add_on_layers_type
+    prototype_activation_function, add_on_layers_type, results_dir, num_workers
 
 base_architecture_type = re.match('^[a-z]*', base_architecture).group(0)
-model_dir = '/shared/results/sacha/local_prototypes/' + base_architecture + '/' + args.experiment_run + '/'
+model_dir = os.path.join(results_dir, base_architecture, args.experiment_run) + '/'
 
 makedir(model_dir)
 shutil.copy(src=os.path.join(os.getcwd(), __file__), dst=model_dir)
@@ -71,7 +72,7 @@ train_dataset = datasets.ImageFolder(
     ]))
 train_loader = torch.utils.data.DataLoader(
     train_dataset, batch_size=train_batch_size, shuffle=True,
-    num_workers=4, pin_memory=False)
+    num_workers=num_workers, pin_memory=False)
 # push set
 train_push_dataset = datasets.ImageFolder(
     train_push_dir,
@@ -150,15 +151,17 @@ for epoch in range(num_train_epochs):
     if epoch < num_warm_epochs:
         tnt.warm_only(model=ppnet_multi, log=log)
         train_accu, converged = tnt.train(model=ppnet_multi, dataloader=train_loader, optimizer=warm_optimizer,
-                                          class_specific=class_specific, coefs=coefs, log=log)
+                                          class_specific=class_specific, coefs=coefs, log=log,
+                                          masking_type=args.masking_type)
     else:
         tnt.joint(model=ppnet_multi, log=log)
         joint_lr_scheduler.step()
         train_accu, converged = tnt.train(model=ppnet_multi, dataloader=train_loader, optimizer=joint_optimizer,
-                                          class_specific=class_specific, coefs=coefs, log=log)
+                                          class_specific=class_specific, coefs=coefs, log=log,
+                                          masking_type=args.masking_type)
 
     accu, _ = tnt.test(model=ppnet_multi, dataloader=test_loader,
-                    class_specific=class_specific, log=log)
+                       class_specific=class_specific, log=log, masking_type=args.masking_type)
     save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name=str(epoch) + '_nopush', accu=accu,
                                 target_accu=0.10, log=log)
 
@@ -180,7 +183,7 @@ for epoch in range(num_train_epochs):
             save_prototype_class_identity=True,
             log=log)
         accu, _ = tnt.test(model=ppnet_multi, dataloader=test_loader,
-                           class_specific=class_specific, log=log)
+                           class_specific=class_specific, log=log, masking_type=args.masking_type)
         save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name=str(epoch) + '_push', accu=accu,
                                     target_accu=0.10, log=log)
         save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name='push_last', accu=accu,
@@ -192,9 +195,9 @@ for epoch in range(num_train_epochs):
                 log('iteration: \t{0}'.format(i))
                 train_accu, converged = tnt.train(model=ppnet_multi, dataloader=train_loader,
                                                   optimizer=last_layer_optimizer, class_specific=class_specific,
-                                                  coefs=coefs, log=log)
+                                                  coefs=coefs, log=log, masking_type=args.masking_type)
                 accu, _ = tnt.test(model=ppnet_multi, dataloader=test_loader,
-                                   class_specific=class_specific, log=log)
+                                   class_specific=class_specific, log=log, masking_type=args.masking_tpe)
                 # save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name=str(epoch) + '_' + str(i) + 'push', accu=accu,
                                             # target_accu=0.30, log=log)
 

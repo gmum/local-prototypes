@@ -80,7 +80,6 @@ def find_k_nearest_patches_to_prototypes(dataloader, # pytorch dataloader (must 
         heaps.append([])
 
     for idx, (search_batch_input, search_y) in enumerate(dataloader):
-        print('batch {}'.format(idx))
         if preprocess_input_function is not None:
             # print('preprocessing input for pushing ...')
             # search_batch = copy.deepcopy(search_batch_input)

@@ -120,7 +120,7 @@ prune.prune_prototypes(dataloader=train_push_loader,
 accu, _ = tnt.test(model=ppnet_multi, dataloader=test_loader,
                    class_specific=class_specific, log=log)
 save.save_model_w_condition(model=ppnet, model_dir=model_dir,
-                            model_name=original_model_name.split('push')[0] + '_prune',
+                            model_name='prune',
                             accu=accu,
                             target_accu=0.10, log=log)
 
@@ -145,12 +145,12 @@ if optimize_last_layer:
         accu, _ = tnt.test(model=ppnet_multi, dataloader=test_loader,
                            class_specific=class_specific, log=log)
         save.save_model_w_condition(model=ppnet, model_dir=model_dir,
-                                    model_name=original_model_name.split('push')[0] + '_' + str(i) + '_prune',
+                                    model_name=str(i) + '_prune',
                                     accu=accu,
                                     target_accu=0.10, log=log)
 
     save.save_model_w_condition(model=ppnet, model_dir=model_dir,
-                                model_name=original_model_name.split('push')[0] + '_prune_last',
+                                model_name='prune_last',
                                 accu=accu,
                                 target_accu=0.10, log=log)
 
