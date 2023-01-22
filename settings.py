@@ -6,6 +6,7 @@ prototype_shape = (2000, 128, 1, 1)
 num_classes = 200
 prototype_activation_function = 'log'
 add_on_layers_type = 'regular'
+use_last_two_blocks = True
 
 num_workers = 4
 
