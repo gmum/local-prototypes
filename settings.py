@@ -11,7 +11,7 @@ use_last_two_blocks = False
 num_workers = 4
 
 # on GMUM
-data_path = '/shared/sets/datasets/birds'
+data_path = '/shared/sets/datasets/birds/'
 train_dir = data_path + 'train_birds_augmented/train_birds_augmented/train_birds_augmented/'
 test_dir = data_path + 'test_birds/test_birds/test_birds/'
 train_push_dir = data_path + 'train_birds/train_birds/train_birds/'

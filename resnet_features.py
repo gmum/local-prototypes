@@ -223,8 +223,8 @@ class ResNet_features(nn.Module):
             prev_x = x
             x = self.layer4(x)
 
-        if self.return_prev_layer:
-            return prev_x, x
+        # if self.return_prev_layer:
+            # return prev_x, x
 
         return x
 

@@ -47,18 +47,14 @@ def _train_or_test(model, dataloader, optimizer=None, class_specific=True, use_l
                 # torch.Size([2000, 200])
 
                 if masking_type == 'random':
+                    RANDOM_PROB = 0.8
                     random_mask = (torch.cuda.FloatTensor(all_similarities.shape[0], 1, all_similarities.shape[-1],
-                                                          all_similarities.shape[-1]).uniform_() > 0.8).float()
+                                                          all_similarities.shape[-1]).uniform_() > RANDOM_PROB).float()
                     random_mask_img = torch.nn.functional.interpolate(random_mask,
                                                                       size=(input.shape[-1], input.shape[-1])).long()
                     new_input = input * random_mask_img
 
                     output2, min_distances2, all_similarities2 = model(new_input, return_all_similarities=True)
-
-                    # output = torch.cat((output, output2), dim=0)
-                    # min_distances = torch.cat((min_distances, min_distances2), dim=0)
-                    # target = torch.cat((target, target), dim=0)
-                    # label = torch.cat((label, label), dim=0)
 
                     sim_diff = (all_similarities - all_similarities2) ** 2
                     sim_diff_loss = torch.sum(sim_diff * random_mask) / torch.sum(random_mask)
@@ -92,11 +88,6 @@ def _train_or_test(model, dataloader, optimizer=None, class_specific=True, use_l
                     for sample_i, sample_label in enumerate(label):
                         proto_sim2.append(all_similarities2[sample_i, proto_nums[sample_i]])
                     proto_sim2 = torch.stack(proto_sim2, dim=0).unsqueeze(1)
-
-                    # output = torch.cat((output, output2), dim=0)
-                    # min_distances = torch.cat((min_distances, min_distances2), dim=0)
-                    # target = torch.cat((target, target), dim=0)
-                    # label = torch.cat((label, label), dim=0)
 
                     sim_diff = (proto_sim - proto_sim2) ** 2
                     sim_diff_loss = torch.sum(sim_diff * high_act_mask_act) / torch.sum(high_act_mask_act)

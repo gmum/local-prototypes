@@ -197,7 +197,7 @@ for epoch in range(num_train_epochs):
                                                   optimizer=last_layer_optimizer, class_specific=class_specific,
                                                   coefs=coefs, log=log, masking_type=args.masking_type)
                 accu, _ = tnt.test(model=ppnet_multi, dataloader=test_loader,
-                                   class_specific=class_specific, log=log, masking_type=args.masking_tpe)
+                                   class_specific=class_specific, log=log, masking_type=args.masking_type)
                 # save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name=str(epoch) + '_' + str(i) + 'push', accu=accu,
                                             # target_accu=0.30, log=log)
 

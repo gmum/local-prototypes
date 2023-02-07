@@ -124,12 +124,13 @@ class PPNet(nn.Module):
         the feature input to prototype layer
         '''
         x = self.features(x)
-        if self.return_prev_layer:
-            x1 = self.add_on_layers(x[0])
-            x2 = self.add_on_layers(x[1])
-            return x1, x2
-        else:
-            return self.add_on_layers(x)
+        return self.add_on_layers(x)
+        # if self.return_prev_layer:
+            # x1 = self.add_on_layers(x[0])
+            # x2 = self.add_on_layers(x[1])
+            # return x1, x2
+        # else:
+            # return self.add_on_layers(x)
 
     @staticmethod
     def _weighted_l2_convolution(input, filter, weights):
@@ -182,13 +183,15 @@ class PPNet(nn.Module):
         x is the raw input
         '''
         conv_features = self.conv_features(x)
-        if self.return_prev_layer:
-            distances1 = self._l2_convolution(conv_features[0])
-            distances2 = self._l2_convolution(conv_features[1])
-            return distances1, distances2
-        else:
-            distances = self._l2_convolution(conv_features)
-            return distances
+        distances = self._l2_convolution(conv_features)
+        return distances
+        # if self.return_prev_layer:
+            # distances1 = self._l2_convolution(conv_features[0])
+            # distances2 = self._l2_convolution(conv_features[1])
+            # return distances1, distances2
+        # else:
+            # distances = self._l2_convolution(conv_features)
+            # return distances
 
     def distance_2_similarity(self, distances):
         if self.prototype_activation_function == 'log':
@@ -201,8 +204,8 @@ class PPNet(nn.Module):
     def forward(self, x, return_all_similarities=False):
         distances = self.prototype_distances(x)
 
-        if self.return_prev_layer:
-            distances1, distances2 = distances
+        # if self.return_prev_layer:
+            # distances1, distances2 = distances
 
         '''
         we cannot refactor the lines below for similarity scores
