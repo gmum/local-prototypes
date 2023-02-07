@@ -184,7 +184,7 @@ for epoch in range(num_train_epochs):
             preprocess_input_function=preprocess_input_function, # normalize if needed
             prototype_layer_stride=1,
             root_dir_for_saving_prototypes=img_dir, # if not None, prototypes will be saved here
-            epoch_number=epoch, # if not provided, prototypes saved previously will be overwritten
+            epoch_number=None, # if not provided, prototypes saved previously will be overwritten
             prototype_img_filename_prefix=prototype_img_filename_prefix,
             prototype_self_act_filename_prefix=prototype_self_act_filename_prefix,
             proto_bound_boxes_filename_prefix=proto_bound_boxes_filename_prefix,
@@ -212,7 +212,7 @@ for epoch in range(num_train_epochs):
                                    class_specific=class_specific, log=log, masking_type=args.masking_type)
 
                 if accu > max_accu_finetune:
-                    save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name='push_finetune',
+                    save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name='push_finetune_best',
                                                 accu=accu, target_accu=0.10, log=log)
                     max_accu_finetune = accu
                 save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name='push_finetune_last',
@@ -222,10 +222,12 @@ for epoch in range(num_train_epochs):
             print("EARLY STOPPING")
             break
 
-print(f'ACCURACIES: ')
+print()
+print(f'{args.experiment_run} ACCURACIES: ')
 print("nopush: {:4.f}".format(max_accu_no_push))
 print("push: {:4.f}".format(max_accu_push))
 print("push_finetune: {:4.f}".format(max_accu_finetune))
+print()
 
 logclose()
 

@@ -18,7 +18,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-gpuid', nargs=1, type=str, default='0')
 parser.add_argument('-modeldir', nargs=1, type=str)
 parser.add_argument('-model', nargs=1, type=str)
-parser.add_argument('-epoch', type=int)
+parser.add_argument('--masking_type', type=str, default='none')
+
 args = parser.parse_args()
 os.environ['CUDA_VISIBLE_DEVICES'] = args.gpuid[0]
 
@@ -31,14 +32,12 @@ prune_threshold = 3
 
 original_model_dir = args.modeldir[0] #'./saved_models/densenet161/003/'
 original_model_name = args.model[0] #'10_16push0.8007.pth'
-epoch_number = args.epoch
 
 need_push = ('nopush' in original_model_name)
 if need_push:
     assert(False) # pruning must happen after push
 
-model_dir = os.path.join(original_model_dir, 'pruned_prototypes_k{}_pt{}'.format(
-    k, prune_threshold))
+model_dir = os.path.join(original_model_dir, 'pruned_prototypes')
 
 makedir(model_dir)
 shutil.copy(src=os.path.join(os.getcwd(), __file__), dst=model_dir)
@@ -113,7 +112,7 @@ prune.prune_prototypes(dataloader=train_push_loader,
                        prune_threshold=prune_threshold,
                        preprocess_input_function=preprocess_input_function, # normalize
                        original_model_dir=original_model_dir,
-                       epoch_number=epoch_number,
+                       epoch_number=0,
                        #model_name=None,
                        log=log,
                        copy_prototype_imgs=True)
@@ -142,9 +141,9 @@ if optimize_last_layer:
     for i in range(100):
         log('iteration: \t{0}'.format(i))
         train_accu, _ = tnt.train(model=ppnet_multi, dataloader=train_loader, optimizer=last_layer_optimizer,
-                                  class_specific=class_specific, coefs=coefs, log=log)
+                                  class_specific=class_specific, coefs=coefs, log=log, masking_type=args.masking_type)
         accu, _ = tnt.test(model=ppnet_multi, dataloader=test_loader,
-                           class_specific=class_specific, log=log)
+                           class_specific=class_specific, log=log, masking_type=args.masking_type)
         if accu > best_accu:
             save.save_model_w_condition(model=ppnet, model_dir=model_dir,
                                         model_name='prune_best',
