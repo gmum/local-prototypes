@@ -160,7 +160,7 @@ def _train_or_test(model, dataloader, optimizer=None, class_specific=True, use_l
                 else:
                     loss = cross_entropy + 0.8 * cluster_cost + 1e-4 * l1
             if neptune_run is not None:
-                neptune_run['train/loss'].append(loss.item())
+                neptune_run['train/batch/loss'].append(loss.item())
 
             total_loss += loss.item()
 
@@ -178,7 +178,7 @@ def _train_or_test(model, dataloader, optimizer=None, class_specific=True, use_l
 
     log('\ttime: \t{0}'.format(end - start))
     if is_train:
-        log('\loss: \t{0}'.format(total_loss / n_batches))
+        log('t\loss: \t{0}'.format(total_loss / n_batches))
     log('\tcross ent: \t{0}'.format(total_cross_entropy / n_batches))
     log('\tcluster: \t{0}'.format(total_cluster_cost / n_batches))
     if class_specific:
