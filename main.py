@@ -145,6 +145,11 @@ from settings import num_train_epochs, num_warm_epochs, push_start, push_epochs
 # train the model
 log('start training')
 import copy
+
+max_accu_no_push = 0.0
+max_accu_push = 0.0
+max_accu_finetune = 0.0
+
 for epoch in range(num_train_epochs):
     log('epoch: \t{0}'.format(epoch))
 
@@ -162,8 +167,11 @@ for epoch in range(num_train_epochs):
 
     accu, _ = tnt.test(model=ppnet_multi, dataloader=test_loader,
                        class_specific=class_specific, log=log, masking_type=args.masking_type)
-    save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name=str(epoch) + '_nopush', accu=accu,
-                                target_accu=0.10, log=log)
+
+    if accu > max_accu_no_push:
+        save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name='nopush_best', accu=accu,
+                                    target_accu=0.10, log=log)
+        max_accu_no_push = accu
 
     save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name='nopush_last', accu=accu,
                                 target_accu=0.10, log=log)
@@ -184,8 +192,12 @@ for epoch in range(num_train_epochs):
             log=log)
         accu, _ = tnt.test(model=ppnet_multi, dataloader=test_loader,
                            class_specific=class_specific, log=log, masking_type=args.masking_type)
-        save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name=str(epoch) + '_push', accu=accu,
-                                    target_accu=0.10, log=log)
+
+        if accu > max_accu_push:
+            save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name='push_best', accu=accu,
+                                        target_accu=0.10, log=log)
+            max_accu_push = accu
+
         save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name='push_last', accu=accu,
                                     target_accu=0.10, log=log)
 
@@ -198,17 +210,22 @@ for epoch in range(num_train_epochs):
                                                   coefs=coefs, log=log, masking_type=args.masking_type)
                 accu, _ = tnt.test(model=ppnet_multi, dataloader=test_loader,
                                    class_specific=class_specific, log=log, masking_type=args.masking_type)
-                # save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name=str(epoch) + '_' + str(i) + 'push', accu=accu,
-                                            # target_accu=0.30, log=log)
 
-            save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name=str(epoch) + '_push_finetune',
-                                        accu=accu, target_accu=0.10, log=log)
-            save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name='push_finetune_last', accu=accu,
-                                        target_accu=0.10, log=log)
+                if accu > max_accu_finetune:
+                    save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name='push_finetune',
+                                                accu=accu, target_accu=0.10, log=log)
+                    max_accu_finetune = accu
+                save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name='push_finetune_last',
+                                            accu=accu, target_accu=0.10, log=log)
 
         if train_accu > 0.99 and converged and epoch > 20:
             print("EARLY STOPPING")
             break
+
+print(f'ACCURACIES: ')
+print("nopush: {:4.f}".format(max_accu_no_push))
+print("push: {:4.f}".format(max_accu_push))
+print("push_finetune: {:4.f}".format(max_accu_finetune))
 
 logclose()
 

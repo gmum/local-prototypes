@@ -138,16 +138,19 @@ if optimize_last_layer:
 
     log('optimize last layer')
     tnt.last_only(model=ppnet_multi, log=log)
+    accu = 0.0
     for i in range(100):
         log('iteration: \t{0}'.format(i))
         train_accu, _ = tnt.train(model=ppnet_multi, dataloader=train_loader, optimizer=last_layer_optimizer,
                                   class_specific=class_specific, coefs=coefs, log=log)
         accu, _ = tnt.test(model=ppnet_multi, dataloader=test_loader,
                            class_specific=class_specific, log=log)
-        save.save_model_w_condition(model=ppnet, model_dir=model_dir,
-                                    model_name=str(i) + '_prune',
-                                    accu=accu,
-                                    target_accu=0.10, log=log)
+        if accu > best_accu:
+            save.save_model_w_condition(model=ppnet, model_dir=model_dir,
+                                        model_name='prune_best',
+                                        accu=accu,
+                                        target_accu=0.10, log=log)
+            best_accu = accu
 
     save.save_model_w_condition(model=ppnet, model_dir=model_dir,
                                 model_name='prune_last',
