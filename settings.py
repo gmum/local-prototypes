@@ -1,6 +1,6 @@
 import os
 
-base_architecture = 'resnet34'
+base_architecture = 'resnet152'
 img_size = 224
 prototype_shape = (2000, 128, 1, 1)
 num_classes = 200
@@ -15,7 +15,7 @@ data_path = os.environ['DATA_PATH']
 train_dir = os.path.join(data_path, os.environ['TRAIN_DIR'])
 test_dir = os.path.join(data_path, os.environ['TEST_DIR'])
 train_push_dir = os.path.join(data_path, os.environ['TRAIN_PUSH_DIR'])
-results_dir = os.path.join(data_path, os.environ['results_dir'])
+results_dir = os.path.join(data_path, os.environ['RESULTS_DIR'])
 
 # local
 # data_path = '/media/mikolaj/HDD/ml_data/CUB/'

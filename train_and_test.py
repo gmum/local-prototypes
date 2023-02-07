@@ -6,7 +6,7 @@ from helpers import list_of_distances
 
 
 def _train_or_test(model, dataloader, optimizer=None, class_specific=True, use_l1_mask=True,
-                   coefs=None, log=print, masking_type='none'):
+                   coefs=None, log=print, masking_type='none', neptune_run=None):
     '''
     model: the multi-gpu model
     dataloader:
@@ -17,6 +17,7 @@ def _train_or_test(model, dataloader, optimizer=None, class_specific=True, use_l
     n_examples = 0
     n_correct = 0
     n_batches = 0
+    total_loss = 0.0
     total_cross_entropy = 0
     total_cluster_cost = 0
     # separation cost is meaningful only for class_specific
@@ -158,6 +159,10 @@ def _train_or_test(model, dataloader, optimizer=None, class_specific=True, use_l
                           + coefs['l1'] * l1)
                 else:
                     loss = cross_entropy + 0.8 * cluster_cost + 1e-4 * l1
+            if neptune_run is not None:
+                neptune_run['train/loss'].append(loss.item())
+
+            total_loss += loss.item()
 
             optimizer.zero_grad()
             loss.backward()
@@ -172,39 +177,57 @@ def _train_or_test(model, dataloader, optimizer=None, class_specific=True, use_l
     end = time.time()
 
     log('\ttime: \t{0}'.format(end - start))
+    if is_train:
+        log('\loss: \t{0}'.format(total_loss / n_batches))
     log('\tcross ent: \t{0}'.format(total_cross_entropy / n_batches))
     log('\tcluster: \t{0}'.format(total_cluster_cost / n_batches))
     if class_specific:
         log('\tseparation:\t{0}'.format(total_separation_cost / n_batches))
         log('\tavg separation:\t{0}'.format(total_avg_separation_cost / n_batches))
     log('\taccu: \t\t{0}%'.format(n_correct / n_examples * 100))
-    log('\tl1: \t\t{0}'.format(model.module.last_layer.weight.norm(p=1).item()))
+    l1 = model.module.last_layer.weight.norm(p=1).item()
+    log('\tl1: \t\t{0}'.format(l1))
     p = model.module.prototype_vectors.view(model.module.num_prototypes, -1).cpu()
     with torch.no_grad():
-        p_avg_pair_dist = torch.mean(list_of_distances(p, p))
-    log('\tp dist pair: \t{0}'.format(p_avg_pair_dist.item()))
+        p_avg_pair_dist = torch.mean(list_of_distances(p, p)).item()
+    log('\tp dist pair: \t{0}'.format(p_avg_pair_dist))
     if isinstance(sim_diff_loss, torch.Tensor):
-        log('\tsim diff:  \t{0}'.format(sim_diff_loss.item()))
+        sim_diff_loss = sim_diff_loss.item()
+    log('\tsim diff:  \t{0}'.format(sim_diff_loss))
 
     converged = total_cluster_cost < total_separation_cost
 
-    return n_correct / n_examples, converged
+    metrics = {
+        'loss_cross_entropy': total_cross_entropy / n_batches,
+        'loss_cluster': total_cluster_cost / n_batches,
+        'loss_separation': total_separation_cost,
+        'avg_separation': total_avg_separation_cost,
+        'l1': l1,
+        'p_avg_pair_dist': p_avg_pair_dist,
+        'sim_diff_loss': sim_diff_loss
+    }
+    if is_train:
+        metrics['loss'] = total_loss / n_batches
+
+    return n_correct / n_examples, converged, metrics
 
 
-def train(model, dataloader, optimizer, class_specific=False, coefs=None, log=print, masking_type='none'):
+def train(model, dataloader, optimizer, class_specific=False, coefs=None, log=print, masking_type='none',
+          neptune_run=None):
     assert(optimizer is not None)
     
     log('\ttrain')
     model.train()
     return _train_or_test(model=model, dataloader=dataloader, optimizer=optimizer,
-                          class_specific=class_specific, coefs=coefs, log=log, masking_type=masking_type)
+                          class_specific=class_specific, coefs=coefs, log=log, masking_type=masking_type,
+                          neptune_run=neptune_run)
 
 
-def test(model, dataloader, class_specific=False, log=print, masking_type='none'):
+def test(model, dataloader, class_specific=False, log=print, masking_type='none', neptune_run=None):
     log('\ttest')
     model.eval()
     return _train_or_test(model=model, dataloader=dataloader, optimizer=None,
-                          class_specific=class_specific, log=log, masking_type=masking_type)
+                          class_specific=class_specific, log=log, masking_type=masking_type, neptune_run=neptune_run)
 
 
 def last_only(model, log=print):
