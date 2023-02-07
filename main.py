@@ -17,6 +17,9 @@ import train_and_test as tnt
 import save
 from log import create_logger
 from preprocess import mean, std, preprocess_input_function
+from settings import NEPTUNE_API_TOKEN
+import neptune.new as neptune
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--experiment_run', type=str, default='001')
@@ -142,6 +145,40 @@ from settings import coefs
 # number of training epochs, number of warm epochs, push start epoch, push epochs
 from settings import num_train_epochs, num_warm_epochs, push_start, push_epochs
 
+if isinstance(NEPTUNE_API_TOKEN, str) and len(NEPTUNE_API_TOKEN) > 0:
+    log('initializing neptune')
+    neptune_run = neptune.init_run(
+        project='mikolajsacha/protobased-research',
+        name=args.experiment_run,
+        api_token=NEPTUNE_API_TOKEN,
+        tags=['local_prototypes']
+    )
+    params = {
+        "masking_type": args.masking_type,
+        "num_train_epochs": num_train_epochs,
+        "num_warm_epochs": num_warm_epochs,
+        "coefs": coefs,
+        "joint_optimizer_lrs": joint_optimizer_lrs,
+        "joint_optimizer_step_size": joint_lr_step_size,
+        "last_layer_optimizer_lr": last_layer_optimizer_lr,
+        "warm_optimizer_lrs": warm_optimizer_lrs,
+        "base_architecture": base_architecture,
+        "img_size": img_size,
+        "prototype_shape": prototype_shape,
+        "num_classes": num_classes,
+        "prototype_activation_function": prototype_activation_function,
+        "add_on_layers_type": add_on_layers_type,
+        "num_workers": num_workers,
+        "train_batch_size": train_batch_size,
+        "test_batch_size": test_batch_size,
+        "train_push_batch_size": train_push_batch_size,
+        "push_start": push_start,
+        "push_epochs": push_epochs
+    }
+    neptune_run["parameters"] = params
+else:
+    neptune_run = None
+
 # train the model
 log('start training')
 import copy
@@ -158,12 +195,20 @@ for epoch in range(num_train_epochs):
         train_accu, converged = tnt.train(model=ppnet_multi, dataloader=train_loader, optimizer=warm_optimizer,
                                           class_specific=class_specific, coefs=coefs, log=log,
                                           masking_type=args.masking_type)
+        if neptune_run is not None:
+            neptune_run["train/epoch/accuracy"].append(train_accu)
+            neptune_run["train/epoch/stage"].append(0.0)
+            neptune_run["train/epoch/converged"].append(float(int(converged)))
     else:
         tnt.joint(model=ppnet_multi, log=log)
         joint_lr_scheduler.step()
         train_accu, converged = tnt.train(model=ppnet_multi, dataloader=train_loader, optimizer=joint_optimizer,
                                           class_specific=class_specific, coefs=coefs, log=log,
                                           masking_type=args.masking_type)
+        if neptune_run is not None:
+            neptune_run["train/epoch/accuracy"].append(train_accu)
+            neptune_run["train/epoch/stage"].append(1.0)
+            neptune_run["train/epoch/converged"].append(float(int(converged)))
 
     accu, _ = tnt.test(model=ppnet_multi, dataloader=test_loader,
                        class_specific=class_specific, log=log, masking_type=args.masking_type)
@@ -172,6 +217,9 @@ for epoch in range(num_train_epochs):
         save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name='nopush_best', accu=accu,
                                     target_accu=0.10, log=log)
         max_accu_no_push = accu
+
+    if neptune_run is not None:
+        neptune_run["test/epoch/accuracy"].append(accu)
 
     save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name='nopush_last', accu=accu,
                                 target_accu=0.10, log=log)
@@ -208,6 +256,12 @@ for epoch in range(num_train_epochs):
                 train_accu, converged = tnt.train(model=ppnet_multi, dataloader=train_loader,
                                                   optimizer=last_layer_optimizer, class_specific=class_specific,
                                                   coefs=coefs, log=log, masking_type=args.masking_type)
+
+                if neptune_run is not None:
+                    neptune_run["train/epoch/accuracy"].append(train_accu)
+                    neptune_run["train/epoch/stage"].append(2.0)
+                    neptune_run["train/epoch/converged"].append(float(int(converged)))
+
                 accu, _ = tnt.test(model=ppnet_multi, dataloader=test_loader,
                                    class_specific=class_specific, log=log, masking_type=args.masking_type)
 
@@ -217,6 +271,9 @@ for epoch in range(num_train_epochs):
                     max_accu_finetune = accu
                 save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name='push_finetune_last',
                                             accu=accu, target_accu=0.10, log=log)
+
+                if neptune_run is not None:
+                    neptune_run["test/epoch/accuracy"].append(accu)
 
         if train_accu > 0.99 and converged and epoch > 20:
             print("EARLY STOPPING")
@@ -231,3 +288,5 @@ print()
 
 logclose()
 
+if neptune_run is not None:
+    neptune_run.stop()

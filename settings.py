@@ -11,11 +11,11 @@ use_last_two_blocks = False
 num_workers = 4
 
 # on GMUM
-data_path = '/shared/sets/datasets/birds/'
-train_dir = data_path + 'train_birds_augmented/train_birds_augmented/train_birds_augmented/'
-test_dir = data_path + 'test_birds/test_birds/test_birds/'
-train_push_dir = data_path + 'train_birds/train_birds/train_birds/'
-results_dir = '/shared/results/sacha/local_prototypes/'
+data_path = os.environ['DATA_PATH']
+train_dir = os.path.join(data_path, os.environ['TRAIN_DIR'])
+test_dir = os.path.join(data_path, os.environ['TEST_DIR'])
+train_push_dir = os.path.join(data_path, os.environ['TRAIN_PUSH_DIR'])
+results_dir = os.path.join(data_path, os.environ['results_dir'])
 
 # local
 # data_path = '/media/mikolaj/HDD/ml_data/CUB/'
@@ -52,3 +52,5 @@ num_warm_epochs = 5
 
 push_start = 10
 push_epochs = [i for i in range(num_train_epochs) if i % 10 == 0]
+
+NEPTUNE_API_TOKEN = os.environ.get('NEPTUNE_API_TOKEN', '')

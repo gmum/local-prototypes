@@ -13,6 +13,8 @@ import train_and_test as tnt
 import save
 from log import create_logger
 from preprocess import mean, std, preprocess_input_function
+import neptune.new as neptune
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-gpuid', nargs=1, type=str, default='0')
@@ -50,7 +52,7 @@ ppnet_multi = torch.nn.DataParallel(ppnet)
 class_specific = True
 
 # load the data
-from settings import train_dir, test_dir, train_push_dir
+from settings import train_dir, test_dir, train_push_dir, NEPTUNE_API_TOKEN
 
 train_batch_size = 80
 test_batch_size = 100
@@ -125,6 +127,16 @@ save.save_model_w_condition(model=ppnet, model_dir=model_dir,
 
 # last layer optimization
 if optimize_last_layer:
+    if isinstance(NEPTUNE_API_TOKEN, str) and len(NEPTUNE_API_TOKEN) > 0:
+        log('initializing neptune')
+        neptune_run = neptune.init_run(
+            project='mikolajsacha/protobased-research',
+            name=args.experiment_run,
+            api_token=NEPTUNE_API_TOKEN,
+            tags=['local_prototypes', 'pruning']
+        )
+    else:
+        neptune_run = None
     last_layer_optimizer_specs = [{'params': ppnet.last_layer.parameters(), 'lr': 1e-4}]
     last_layer_optimizer = torch.optim.Adam(last_layer_optimizer_specs)
 
@@ -142,8 +154,15 @@ if optimize_last_layer:
         log('iteration: \t{0}'.format(i))
         train_accu, _ = tnt.train(model=ppnet_multi, dataloader=train_loader, optimizer=last_layer_optimizer,
                                   class_specific=class_specific, coefs=coefs, log=log, masking_type=args.masking_type)
+        if neptune_run is not None:
+            neptune_run["train/epoch/accuracy"].append(train_accu)
+            neptune_run["train/epoch/stage"].append(3.0)
+
         accu, _ = tnt.test(model=ppnet_multi, dataloader=test_loader,
                            class_specific=class_specific, log=log, masking_type=args.masking_type)
+        if neptune_run is not None:
+            neptune_run["test/epoch/accuracy"].append(accu)
+
         if accu > best_accu:
             save.save_model_w_condition(model=ppnet, model_dir=model_dir,
                                         model_name='prune_best',
@@ -155,5 +174,7 @@ if optimize_last_layer:
                                 model_name='prune_last',
                                 accu=accu,
                                 target_accu=0.10, log=log)
+    if neptune_run is not None:
+        neptune_run.stop()
 
 logclose()
