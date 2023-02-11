@@ -1,9 +1,7 @@
 import os
 import shutil
 
-import torch
 import torch.utils.data
-# import torch.utils.data.distributed
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 
@@ -17,7 +15,7 @@ import train_and_test as tnt
 import save
 from log import create_logger
 from preprocess import mean, std, preprocess_input_function
-from settings import NEPTUNE_API_TOKEN
+from settings import NEPTUNE_API_TOKEN, max_num_cycles, masking_random_prob
 import neptune.new as neptune
 
 parser = argparse.ArgumentParser()
@@ -28,7 +26,6 @@ parser.add_argument('--masking_type', type=str, default='none')
 
 args = parser.parse_args()
 os.environ['CUDA_VISIBLE_DEVICES'] = args.gpuid[0]
-print(os.environ['CUDA_VISIBLE_DEVICES'])
 
 # book keeping namings and code
 from settings import base_architecture, img_size, prototype_shape, num_classes, \
@@ -97,11 +94,6 @@ test_loader = torch.utils.data.DataLoader(
     num_workers=4, pin_memory=False)
 
 # we should look into distributed sampler more carefully at torch.utils.data.distributed.DistributedSampler(train_dataset)
-log('training set size: {0}'.format(len(train_loader.dataset)))
-log('push set size: {0}'.format(len(train_push_loader.dataset)))
-log('test set size: {0}'.format(len(test_loader.dataset)))
-log('batch size: {0}'.format(train_batch_size))
-
 # construct the model
 ppnet = model.construct_PPNet(base_architecture=base_architecture,
                               pretrained=True, img_size=img_size,
@@ -159,6 +151,7 @@ if isinstance(NEPTUNE_API_TOKEN, str) and len(NEPTUNE_API_TOKEN) > 0:
         "masking_type": args.masking_type,
         "num_train_epochs": num_train_epochs,
         "num_warm_epochs": num_warm_epochs,
+        "max_num_cycles": max_num_cycles,
         "coefs": coefs,
         "joint_optimizer_lrs": joint_optimizer_lrs,
         "joint_optimizer_step_size": joint_lr_step_size,
@@ -175,23 +168,26 @@ if isinstance(NEPTUNE_API_TOKEN, str) and len(NEPTUNE_API_TOKEN) > 0:
         "test_batch_size": test_batch_size,
         "train_push_batch_size": train_push_batch_size,
         "push_start": push_start,
-        "push_epochs": push_epochs
+        "push_epochs": push_epochs,
+        'masking_random_prob': masking_random_prob,
     }
     neptune_run["parameters"] = params
 else:
     neptune_run = None
 
-# train the model
+log('training set size: {0}'.format(len(train_loader.dataset)))
+log('push set size: {0}'.format(len(train_push_loader.dataset)))
+log('test set size: {0}'.format(len(test_loader.dataset)))
+log('batch size: {0}'.format(train_batch_size))
+
 log('start training')
-import copy
 
 max_accu_no_push = 0.0
 max_accu_push = 0.0
 max_accu_finetune = 0.0
+n_cycle = 0
 
 for epoch in range(num_train_epochs):
-    log('epoch: \t{0}'.format(epoch))
-
     if epoch < num_warm_epochs:
         tnt.warm_only(model=ppnet_multi, log=log)
         train_accu, converged, metrics = tnt.train(model=ppnet_multi, dataloader=train_loader, optimizer=warm_optimizer,
@@ -206,7 +202,7 @@ for epoch in range(num_train_epochs):
                                                    masking_type=args.masking_type, neptune_run=neptune_run)
     if neptune_run is not None:
         neptune_run["train/epoch/accuracy"].append(train_accu)
-        neptune_run["train/epoch/stage"].append(1.0)
+        neptune_run["train/epoch/stage"].append(0.0 if epoch < num_warm_epochs else 1.0)
         neptune_run["train/epoch/converged"].append(float(int(converged)))
         for key, val in metrics.items():
             neptune_run[f"train/epoch/{key}"].append(float(val))
@@ -215,18 +211,19 @@ for epoch in range(num_train_epochs):
                                 class_specific=class_specific, log=log, masking_type=args.masking_type,
                                 neptune_run=neptune_run)
 
-    if accu > max_accu_no_push:
-        save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name='nopush_best', accu=accu,
-                                    target_accu=0.10, log=log)
-        max_accu_no_push = accu
-
     if neptune_run is not None:
         neptune_run["test/epoch/accuracy"].append(accu)
         for key, val in metrics.items():
             neptune_run[f"test/epoch/{key}"].append(float(val))
 
+    if accu > max_accu_no_push:
+        log(f"Cycle {n_cycle} - new best test accuracy: {accu:.2f}")
+        save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name='nopush_best', accu=accu,
+                                    target_accu=0.10, log=log, cycle=n_cycle)
+        max_accu_no_push = accu
+
     save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name='nopush_last', accu=accu,
-                                target_accu=0.10, log=log)
+                                target_accu=0.10, log=log, cycle=n_cycle)
 
     if epoch >= push_start and epoch in push_epochs:
         push.push_prototypes(
@@ -248,11 +245,11 @@ for epoch in range(num_train_epochs):
 
         if accu > max_accu_push:
             save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name='push_best', accu=accu,
-                                        target_accu=0.10, log=log)
+                                        target_accu=0.10, log=log, cycle=n_cycle)
             max_accu_push = accu
 
         save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name='push_last', accu=accu,
-                                    target_accu=0.10, log=log)
+                                    target_accu=0.10, log=log, cycle=n_cycle)
 
         if prototype_activation_function != 'linear':
             tnt.last_only(model=ppnet_multi, log=log)
@@ -276,27 +273,37 @@ for epoch in range(num_train_epochs):
                                             class_specific=class_specific, log=log, masking_type=args.masking_type,
                                             neptune_run=neptune_run)
 
-                if accu > max_accu_finetune:
-                    save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name='push_finetune_best',
-                                                accu=accu, target_accu=0.10, log=log)
-                    max_accu_finetune = accu
-                save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name='push_finetune_last',
-                                            accu=accu, target_accu=0.10, log=log)
-
                 if neptune_run is not None:
                     neptune_run["test/epoch/accuracy"].append(accu)
                     for key, val in metrics.items():
                         neptune_run[f"test/epoch/{key}"].append(float(val))
 
+            if accu > max_accu_finetune:
+                save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name='push_finetune_best',
+                                            accu=accu, target_accu=0.10, log=log, cycle=n_cycle)
+                max_accu_finetune = accu
+            save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name='push_finetune_last',
+                                        accu=accu, target_accu=0.10, log=log, cycle=n_cycle)
+
         if train_accu > 0.99 and converged and epoch > 20:
             print("EARLY STOPPING")
             break
 
+        # reset metrics after each cycle
+        max_accu_no_push = 0.0
+        max_accu_push = 0.0
+        max_accu_finetune = 0.0
+        n_cycle += 1
+
+        if n_cycle > max_num_cycles:
+            print("REACHED MAXIMUM NUMBER OF CYCLES ({})".format(max_num_cycles))
+            break
+
 print()
 print(f'{args.experiment_run} ACCURACIES: ')
-print("nopush: {:4.f}".format(max_accu_no_push))
-print("push: {:4.f}".format(max_accu_push))
-print("push_finetune: {:4.f}".format(max_accu_finetune))
+print("nopush: {:.4f}".format(max_accu_no_push))
+print("push: {:.4f}".format(max_accu_push))
+print("push_finetune: {:.4f}".format(max_accu_finetune))
 print()
 
 logclose()

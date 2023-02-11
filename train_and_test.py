@@ -3,6 +3,7 @@ import torch
 import numpy as np
 
 from helpers import list_of_distances
+from settings import masking_random_prob
 
 
 def _train_or_test(model, dataloader, optimizer=None, class_specific=True, use_l1_mask=True,
@@ -23,6 +24,7 @@ def _train_or_test(model, dataloader, optimizer=None, class_specific=True, use_l
     # separation cost is meaningful only for class_specific
     total_separation_cost = 0
     total_avg_separation_cost = 0
+    total_sim_diff_loss = 0.0
 
     for i, (image, label) in enumerate(dataloader):
         input = image.cuda()
@@ -48,9 +50,8 @@ def _train_or_test(model, dataloader, optimizer=None, class_specific=True, use_l
                 # torch.Size([2000, 200])
 
                 if masking_type == 'random':
-                    RANDOM_PROB = 0.8
                     random_mask = (torch.cuda.FloatTensor(all_similarities.shape[0], 1, all_similarities.shape[-1],
-                                                          all_similarities.shape[-1]).uniform_() > RANDOM_PROB).float()
+                                                          all_similarities.shape[-1]).uniform_() > masking_random_prob).float()
                     random_mask_img = torch.nn.functional.interpolate(random_mask,
                                                                       size=(input.shape[-1], input.shape[-1])).long()
                     new_input = input * random_mask_img
@@ -138,6 +139,7 @@ def _train_or_test(model, dataloader, optimizer=None, class_specific=True, use_l
             total_cluster_cost += cluster_cost.item()
             total_separation_cost += separation_cost.item()
             total_avg_separation_cost += avg_separation_cost.item()
+            total_sim_diff_loss += sim_diff_loss.item() if torch.is_tensor(sim_diff_loss) else 0
 
         # compute gradient and do SGD step
         if is_train:
@@ -176,24 +178,24 @@ def _train_or_test(model, dataloader, optimizer=None, class_specific=True, use_l
 
     end = time.time()
 
-    log('\ttime: \t{0}'.format(end - start))
-    if is_train:
-        log('t\loss: \t{0}'.format(total_loss / n_batches))
-    log('\tcross ent: \t{0}'.format(total_cross_entropy / n_batches))
-    log('\tcluster: \t{0}'.format(total_cluster_cost / n_batches))
-    if class_specific:
-        log('\tseparation:\t{0}'.format(total_separation_cost / n_batches))
-        log('\tavg separation:\t{0}'.format(total_avg_separation_cost / n_batches))
-    log('\taccu: \t\t{0}%'.format(n_correct / n_examples * 100))
-    l1 = model.module.last_layer.weight.norm(p=1).item()
-    log('\tl1: \t\t{0}'.format(l1))
+    # log('\ttime: \t{0}'.format(end - start))
+    # if is_train:
+        # log('t\loss: \t{0}'.format(total_loss / n_batches))
+    # log('\tcross ent: \t{0}'.format(total_cross_entropy / n_batches))
+    # log('\tcluster: \t{0}'.format(total_cluster_cost / n_batches))
+    # if class_specific:
+        # log('\tseparation:\t{0}'.format(total_separation_cost / n_batches))
+        # log('\tavg separation:\t{0}'.format(total_avg_separation_cost / n_batches))
+    # log('\taccu: \t\t{0}%'.format(n_correct / n_examples * 100))
+    # l1 = model.module.last_layer.weight.norm(p=1).item()
+    # log('\tl1: \t\t{0}'.format(l1))
     p = model.module.prototype_vectors.view(model.module.num_prototypes, -1).cpu()
     with torch.no_grad():
         p_avg_pair_dist = torch.mean(list_of_distances(p, p)).item()
-    log('\tp dist pair: \t{0}'.format(p_avg_pair_dist))
-    if isinstance(sim_diff_loss, torch.Tensor):
-        sim_diff_loss = sim_diff_loss.item()
-    log('\tsim diff:  \t{0}'.format(sim_diff_loss))
+    # log('\tp dist pair: \t{0}'.format(p_avg_pair_dist))
+    # if isinstance(sim_diff_loss, torch.Tensor):
+        # sim_diff_loss = sim_diff_loss.item()
+    # log('\tsim diff:  \t{0}'.format(sim_diff_loss))
 
     converged = total_cluster_cost < total_separation_cost
 
@@ -204,8 +206,11 @@ def _train_or_test(model, dataloader, optimizer=None, class_specific=True, use_l
         'avg_separation': total_avg_separation_cost,
         'l1': l1,
         'p_avg_pair_dist': p_avg_pair_dist,
-        'sim_diff_loss': sim_diff_loss
     }
+
+    if masking_type != 'none':
+        metrics['sim_diff_loss'] = total_sim_diff_loss / n_batches
+
     if is_train:
         metrics['loss'] = total_loss / n_batches
 
@@ -215,8 +220,6 @@ def _train_or_test(model, dataloader, optimizer=None, class_specific=True, use_l
 def train(model, dataloader, optimizer, class_specific=False, coefs=None, log=print, masking_type='none',
           neptune_run=None):
     assert(optimizer is not None)
-    
-    log('\ttrain')
     model.train()
     return _train_or_test(model=model, dataloader=dataloader, optimizer=optimizer,
                           class_specific=class_specific, coefs=coefs, log=log, masking_type=masking_type,
@@ -224,7 +227,6 @@ def train(model, dataloader, optimizer, class_specific=False, coefs=None, log=pr
 
 
 def test(model, dataloader, class_specific=False, log=print, masking_type='none', neptune_run=None):
-    log('\ttest')
     model.eval()
     return _train_or_test(model=model, dataloader=dataloader, optimizer=None,
                           class_specific=class_specific, log=log, masking_type=masking_type, neptune_run=neptune_run)

@@ -1,6 +1,6 @@
 import os
 
-base_architecture = 'resnet152'
+base_architecture = 'resnet34'
 img_size = 224
 prototype_shape = (2000, 128, 1, 1)
 num_classes = 200
@@ -49,8 +49,11 @@ coefs = {
 
 num_train_epochs = 1000
 num_warm_epochs = 5
+max_num_cycles = 5
 
 push_start = 10
 push_epochs = [i for i in range(num_train_epochs) if i % 10 == 0]
 
 NEPTUNE_API_TOKEN = os.environ.get('NEPTUNE_API_TOKEN', '')
+
+masking_random_prob = 0.8

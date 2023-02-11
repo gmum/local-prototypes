@@ -44,7 +44,7 @@ shutil.copy(src=os.path.join(os.getcwd(), __file__), dst=model_dir)
 
 log, logclose = create_logger(log_filename=os.path.join(model_dir, 'prune.log'))
 
-ppnet = torch.load(original_model_dir + original_model_name)
+ppnet = torch.load(os.path.join(original_model_dir, original_model_name))
 ppnet = ppnet.cuda()
 ppnet_multi = torch.nn.DataParallel(ppnet)
 class_specific = True
@@ -163,12 +163,12 @@ if optimize_last_layer:
         if neptune_run is not None:
             neptune_run["test/epoch/accuracy"].append(accu)
 
-        if accu > best_accu:
-            save.save_model_w_condition(model=ppnet, model_dir=model_dir,
-                                        model_name='prune_best',
-                                        accu=accu,
-                                        target_accu=0.10, log=log)
-            best_accu = accu
+        # if accu > best_accu:
+            # save.save_model_w_condition(model=ppnet, model_dir=model_dir,
+                                        # model_name='prune_best',
+                                        # accu=accu,
+                                        # target_accu=0.10, log=log)
+            # best_accu = accu
 
     save.save_model_w_condition(model=ppnet, model_dir=model_dir,
                                 model_name='prune_last',
