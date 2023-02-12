@@ -32,6 +32,7 @@ prune_threshold = 3
 
 original_model_dir = args.modeldir[0]  # './saved_models/densenet161/003/'
 original_model_name = args.model[0]  # '10_16push0.8007.pth'
+original_experiment_name = os.path.basename(os.path.normpath(original_model_dir))
 
 need_push = ('nopush' in original_model_name)
 if need_push:
@@ -129,7 +130,7 @@ if optimize_last_layer:
         log('initializing neptune')
         neptune_run = neptune.init_run(
             project='mikolajsacha/protobased-research',
-            name=f'{model_dir}_pruning',
+            name=f'{original_experiment_name}_pruning',
             api_token=NEPTUNE_API_TOKEN,
             tags=['local_prototypes', 'pruning']
         )
