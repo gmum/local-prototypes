@@ -8,7 +8,7 @@ prototype_activation_function = 'log'
 add_on_layers_type = 'regular'
 use_last_two_blocks = False
 
-num_workers = 4
+num_workers = 8
 
 # on GMUM
 data_path = os.environ['DATA_PATH']
