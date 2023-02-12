@@ -113,7 +113,10 @@ def _train_or_test(model, dataloader, optimizer=None, class_specific=True, use_l
                     else:
                         raise ValueError(f'Unknown sim_diff_function: ', sim_diff_function)
 
-                    sim_diff_loss = torch.sum(sim_diff * high_act_mask_act) / torch.sum(high_act_mask_act)
+                    if quantized_mask:
+                        sim_diff_loss = torch.sum(sim_diff * high_act_mask_act) / torch.sum(high_act_mask_act)
+                    else:
+                        sim_diff_loss = torch.mean(sim_diff)
 
                 max_dist = (model.module.prototype_shape[1]
                             * model.module.prototype_shape[2]
