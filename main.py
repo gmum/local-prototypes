@@ -203,7 +203,7 @@ else:
 
 for epoch in range(num_train_epochs):
     if args.sim_diff_weight_annealing:
-        sim_diff_weight = max(max_sim_diff_weight / min_num_epochs * epoch, max_sim_diff_weight)
+        sim_diff_weight = min(max_sim_diff_weight / min_num_epochs * epoch, max_sim_diff_weight)
     else:
         sim_diff_weight = max_sim_diff_weight
     if neptune_run is not None:
