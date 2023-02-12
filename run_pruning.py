@@ -20,6 +20,8 @@ parser.add_argument('-gpuid', nargs=1, type=str, default='0')
 parser.add_argument('-modeldir', nargs=1, type=str)
 parser.add_argument('-model', nargs=1, type=str)
 parser.add_argument('--masking_type', type=str, default='none')
+parser.add_argument('--quantized_mask', type=bool, default=False)
+parser.add_argument('--sim_diff_function', type=str, default='l1')
 
 args = parser.parse_args()
 os.environ['CUDA_VISIBLE_DEVICES'] = args.gpuid[0]
@@ -53,7 +55,7 @@ class_specific = True
 # load the data
 from settings import train_dir, test_dir, train_push_dir, NEPTUNE_API_TOKEN, num_workers, coefs
 
-train_batch_size = 80
+train_batch_size = 160
 test_batch_size = 100
 img_size = 224
 train_push_batch_size = 80
@@ -124,6 +126,13 @@ save.save_model_w_condition(model=ppnet, model_dir=model_dir,
                             accu=accu,
                             target_accu=0.10, log=log)
 
+if args.masking_type == 'random':
+    sim_diff_weight = coefs['sim_diff_random']
+elif args.masking_type == 'high_act':
+    sim_diff_weight = coefs['sim_diff_high_act']
+else:
+    sim_diff_weight = 0.0
+
 # last layer optimization
 if optimize_last_layer:
     if isinstance(NEPTUNE_API_TOKEN, str) and len(NEPTUNE_API_TOKEN) > 0:
@@ -142,18 +151,20 @@ if optimize_last_layer:
     log('optimize last layer')
     tnt.last_only(model=ppnet_multi, log=log)
     accu = 0.0
-    for i in range(100):
+    for i in range(20):
         # log('iteration: \t{0}'.format(i))
         train_accu, _, metrics = tnt.train(model=ppnet_multi, dataloader=train_loader, optimizer=last_layer_optimizer,
                                            class_specific=class_specific, coefs=coefs, log=log,
-                                           masking_type=args.masking_type, neptune_run=neptune_run)
+                                           masking_type=args.masking_type, neptune_run=neptune_run,
+                                           quantized_mask=args.quantized_mask, sim_diff_function=args.sim_diff_function)
         if neptune_run is not None:
             neptune_run["train/epoch/accuracy"].append(train_accu)
             neptune_run["train/epoch/stage"].append(3.0)
 
         accu, _, metrics = tnt.test(model=ppnet_multi, dataloader=test_loader,
                                     class_specific=class_specific, log=log, masking_type=args.masking_type,
-                                    neptune_run=neptune_run)
+                                    neptune_run=neptune_run, quantized_mask=args.quantized_mask,
+                                    sim_diff_function=args.sim_diff_function)
         if neptune_run is not None:
             neptune_run["test/epoch/accuracy"].append(accu)
 

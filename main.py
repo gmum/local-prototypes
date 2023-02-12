@@ -23,6 +23,9 @@ parser.add_argument('--experiment_run', type=str, default='001')
 parser.add_argument('-gpuid', nargs=1, type=str, default='0')  # python3 main.py -gpuid=0,1,2,3
 parser.add_argument('--last_layer_num', type=int, default=-1)
 parser.add_argument('--masking_type', type=str, default='none')
+parser.add_argument('--quantized_mask', type=bool, default=False)
+parser.add_argument('--sim_diff_weight_annealing', type=bool, default=False)
+parser.add_argument('--sim_diff_function', type=str, default='l1')
 
 args = parser.parse_args()
 os.environ['CUDA_VISIBLE_DEVICES'] = args.gpuid[0]
@@ -170,6 +173,9 @@ if isinstance(NEPTUNE_API_TOKEN, str) and len(NEPTUNE_API_TOKEN) > 0:
         "push_start": push_start,
         "push_epochs": push_epochs,
         'masking_random_prob': masking_random_prob,
+        'quantized_mask': args.quantized_mask,
+        'sim_diff_weight_annealing': args.sim_diff_weight_annealing,
+        'sim_diff_function': args.sim_diff_function,
     }
     neptune_run["parameters"] = params
 else:
@@ -186,20 +192,38 @@ max_accu_no_push = 0.0
 max_accu_push = 0.0
 max_accu_finetune = 0.0
 n_cycle = 0
+min_num_epochs = 20
+
+if args.masking_type == 'random':
+    max_sim_diff_weight = coefs['sim_diff_random']
+elif args.masking_type == 'high_act':
+    max_sim_diff_weight = coefs['sim_diff_high_act']
+else:
+    max_sim_diff_weight = 0.0
 
 for epoch in range(num_train_epochs):
+    if args.sim_diff_weight_annealing:
+        sim_diff_weight = max(max_sim_diff_weight / min_num_epochs * epoch, max_sim_diff_weight)
+    else:
+        sim_diff_weight = max_sim_diff_weight
+    neptune_run["train/sim_diff_weight"].append(sim_diff_weight)
+
     if epoch < num_warm_epochs:
         tnt.warm_only(model=ppnet_multi, log=log)
         train_accu, converged, metrics = tnt.train(model=ppnet_multi, dataloader=train_loader, optimizer=warm_optimizer,
                                                    class_specific=class_specific, coefs=coefs, log=log,
-                                                   masking_type=args.masking_type, neptune_run=neptune_run)
+                                                   masking_type=args.masking_type, neptune_run=neptune_run,
+                                                   quantized_mask=args.quantized_mask, sim_diff_weight=sim_diff_weight,
+                                                   sim_diff_function=args.sim_diff_function)
     else:
         tnt.joint(model=ppnet_multi, log=log)
         joint_lr_scheduler.step()
         train_accu, converged, metrics = tnt.train(model=ppnet_multi, dataloader=train_loader,
                                                    optimizer=joint_optimizer,
                                                    class_specific=class_specific, coefs=coefs, log=log,
-                                                   masking_type=args.masking_type, neptune_run=neptune_run)
+                                                   masking_type=args.masking_type, neptune_run=neptune_run,
+                                                   quantized_mask=args.quantized_mask, sim_diff_weight=sim_diff_weight,
+                                                   sim_diff_function=args.sim_diff_function)
     if neptune_run is not None:
         neptune_run["train/epoch/accuracy"].append(train_accu)
         neptune_run["train/epoch/stage"].append(0.0 if epoch < num_warm_epochs else 1.0)
@@ -209,7 +233,8 @@ for epoch in range(num_train_epochs):
 
     accu, _, metrics = tnt.test(model=ppnet_multi, dataloader=test_loader,
                                 class_specific=class_specific, log=log, masking_type=args.masking_type,
-                                neptune_run=neptune_run)
+                                neptune_run=neptune_run, quantized_mask=args.quantized_mask,
+                                sim_diff_weight=sim_diff_weight, sim_diff_function=args.sim_diff_function)
 
     if neptune_run is not None:
         neptune_run["test/epoch/accuracy"].append(accu)
@@ -241,7 +266,8 @@ for epoch in range(num_train_epochs):
             log=log)
         accu, _, metrics = tnt.test(model=ppnet_multi, dataloader=test_loader,
                                     class_specific=class_specific, log=log, masking_type=args.masking_type,
-                                    neptune_run=neptune_run)
+                                    neptune_run=neptune_run, quantized_mask=args.quantized_mask,
+                                    sim_diff_weight=sim_diff_weight, sim_diff_function=args.sim_diff_function)
 
         if accu > max_accu_push:
             save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name='push_best', accu=accu,
@@ -259,7 +285,9 @@ for epoch in range(num_train_epochs):
                                                            optimizer=last_layer_optimizer,
                                                            class_specific=class_specific,
                                                            coefs=coefs, log=log, masking_type=args.masking_type,
-                                                           neptune_run=neptune_run)
+                                                           neptune_run=neptune_run, quantized_mask=args.quantized_mask,
+                                                           sim_diff_weight=sim_diff_weight,
+                                                           sim_diff_function=args.sim_diff_function)
 
                 if neptune_run is not None:
                     neptune_run["train/epoch/accuracy"].append(train_accu)
@@ -271,7 +299,8 @@ for epoch in range(num_train_epochs):
 
                 accu, _, metrics = tnt.test(model=ppnet_multi, dataloader=test_loader,
                                             class_specific=class_specific, log=log, masking_type=args.masking_type,
-                                            neptune_run=neptune_run)
+                                            neptune_run=neptune_run, quantized_mask=args.quantized_mask,
+                                            sim_diff_weight=sim_diff_weight, sim_diff_function=args.sim_diff_function)
 
                 if neptune_run is not None:
                     neptune_run["test/epoch/accuracy"].append(accu)
@@ -285,7 +314,7 @@ for epoch in range(num_train_epochs):
             save.save_model_w_condition(model=ppnet, model_dir=model_dir, model_name='push_finetune_last',
                                         accu=accu, target_accu=0.10, log=log, cycle=n_cycle)
 
-        if train_accu > 0.99 and converged and epoch > 20:
+        if train_accu > 0.99 and converged and epoch > min_num_epochs:
             print("EARLY STOPPING")
             break
 
