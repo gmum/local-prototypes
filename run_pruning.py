@@ -129,7 +129,7 @@ if optimize_last_layer:
         log('initializing neptune')
         neptune_run = neptune.init_run(
             project='mikolajsacha/protobased-research',
-            name=args.experiment_run,
+            name=f'{model_dir}_pruning',
             api_token=NEPTUNE_API_TOKEN,
             tags=['local_prototypes', 'pruning']
         )
@@ -149,7 +149,7 @@ if optimize_last_layer:
     tnt.last_only(model=ppnet_multi, log=log)
     accu = 0.0
     for i in range(100):
-        log('iteration: \t{0}'.format(i))
+        # log('iteration: \t{0}'.format(i))
         train_accu, _, metrics = tnt.train(model=ppnet_multi, dataloader=train_loader, optimizer=last_layer_optimizer,
                                            class_specific=class_specific, coefs=coefs, log=log,
                                            masking_type=args.masking_type, neptune_run=neptune_run)

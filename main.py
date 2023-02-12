@@ -254,7 +254,7 @@ for epoch in range(num_train_epochs):
         if prototype_activation_function != 'linear':
             tnt.last_only(model=ppnet_multi, log=log)
             for i in range(20):
-                log('iteration: \t{0}'.format(i))
+                # log('iteration: \t{0}'.format(i))
                 train_accu, converged, metrics = tnt.train(model=ppnet_multi, dataloader=train_loader,
                                                            optimizer=last_layer_optimizer,
                                                            class_specific=class_specific,
@@ -295,7 +295,7 @@ for epoch in range(num_train_epochs):
         max_accu_finetune = 0.0
         n_cycle += 1
 
-        if n_cycle > max_num_cycles:
+        if n_cycle >= max_num_cycles:
             print("REACHED MAXIMUM NUMBER OF CYCLES ({})".format(max_num_cycles))
             break
 
