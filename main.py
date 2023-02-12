@@ -206,7 +206,8 @@ for epoch in range(num_train_epochs):
         sim_diff_weight = max(max_sim_diff_weight / min_num_epochs * epoch, max_sim_diff_weight)
     else:
         sim_diff_weight = max_sim_diff_weight
-    neptune_run["train/sim_diff_weight"].append(sim_diff_weight)
+    if neptune_run is not None:
+        neptune_run["train/sim_diff_weight"].append(sim_diff_weight)
 
     if epoch < num_warm_epochs:
         tnt.warm_only(model=ppnet_multi, log=log)

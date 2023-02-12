@@ -51,7 +51,8 @@ def _train_or_test(model, dataloader, optimizer=None, class_specific=True, use_l
 
                 if masking_type == 'random':
                     random_mask = (torch.cuda.FloatTensor(all_similarities.shape[0], 1, all_similarities.shape[-1],
-                                                          all_similarities.shape[-1]).uniform_() > masking_random_prob).float()
+                                                          all_similarities.shape[
+                                                              -1]).uniform_() > masking_random_prob).float()
                     random_mask_img = torch.nn.functional.interpolate(random_mask,
                                                                       size=(input.shape[-1], input.shape[-1])).long()
                     new_input = input * random_mask_img
@@ -72,25 +73,31 @@ def _train_or_test(model, dataloader, optimizer=None, class_specific=True, use_l
                             proto_sim.append(all_similarities[sample_i, proto_num])
                         proto_sim = torch.stack(proto_sim, dim=0).unsqueeze(1)
 
-                        all_sim_scaled = torch.nn.functional.interpolate(proto_sim,
-                                                                         size=(input.shape[-1], input.shape[-1]),
-                                                                         mode='bilinear')
-
                         if quantized_mask:
+                            all_sim_scaled = torch.nn.functional.interpolate(proto_sim,
+                                                                             size=(input.shape[-1], input.shape[-1]),
+                                                                             mode='bilinear')
                             q = np.random.uniform(0.5, 0.98)
                             quantile_mask = torch.quantile(all_sim_scaled.flatten(start_dim=-2), q=q, dim=-1)
                             quantile_mask = quantile_mask.unsqueeze(-1).unsqueeze(-1)
 
                             high_act_mask_img = (all_sim_scaled > quantile_mask).float()
+                            high_act_mask_act = torch.nn.functional.interpolate(high_act_mask_img,
+                                                                                size=(all_similarities.shape[-1],
+                                                                                      all_similarities.shape[-1]),
+                                                                                mode='bilinear')
                         else:
-                            all_sim_scaled -= all_sim_scaled.min(1, keepdim=True)[0]
-                            all_sim_scaled /= all_sim_scaled.max(1, keepdim=True)[0]
-                            high_act_mask_img = all_sim_scaled
+                            proto_sim_min = proto_sim.flatten(start_dim=1).min(-1)[0] \
+                                .unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
+                            proto_sim_norm = proto_sim - proto_sim_min
+                            proto_sim_max = proto_sim_norm.flatten(start_dim=1).max(-1)[0] \
+                                .unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
+                            proto_sim_norm /= proto_sim_max
+                            high_act_mask_act = proto_sim_norm
+                            high_act_mask_img = torch.nn.functional.interpolate(high_act_mask_act,
+                                                                                size=(input.shape[-1], input.shape[-1]),
+                                                                                mode='bilinear')
 
-                        high_act_mask_act = torch.nn.functional.interpolate(high_act_mask_img,
-                                                                            size=(all_similarities.shape[-1],
-                                                                                  all_similarities.shape[-1]),
-                                                                            mode='bilinear')
                         new_input = input * high_act_mask_img
 
                     output2, min_distances2, all_similarities2 = model(new_input.detach(), return_all_similarities=True)
@@ -126,14 +133,15 @@ def _train_or_test(model, dataloader, optimizer=None, class_specific=True, use_l
 
                 # calculate avg cluster cost
                 avg_separation_cost = \
-                    torch.sum(min_distances * prototypes_of_wrong_class, dim=1) / torch.sum(prototypes_of_wrong_class, dim=1)
+                    torch.sum(min_distances * prototypes_of_wrong_class, dim=1) / torch.sum(prototypes_of_wrong_class,
+                                                                                            dim=1)
                 avg_separation_cost = torch.mean(avg_separation_cost)
-                
+
                 if use_l1_mask:
                     l1_mask = 1 - torch.t(model.module.prototype_class_identity).cuda()
                     l1 = (model.module.last_layer.weight * l1_mask).norm(p=1)
                 else:
-                    l1 = model.module.last_layer.weight.norm(p=1) 
+                    l1 = model.module.last_layer.weight.norm(p=1)
 
             else:
                 min_distance, _ = torch.min(min_distances, dim=1)
@@ -160,17 +168,17 @@ def _train_or_test(model, dataloader, optimizer=None, class_specific=True, use_l
             if class_specific:
                 if coefs is not None:
                     loss = (coefs['crs_ent'] * cross_entropy
-                          + coefs['clst'] * cluster_cost
-                          + coefs['sep'] * separation_cost
-                          + sim_diff_weight * sim_diff_loss
-                          + coefs['l1'] * l1)
+                            + coefs['clst'] * cluster_cost
+                            + coefs['sep'] * separation_cost
+                            + sim_diff_weight * sim_diff_loss
+                            + coefs['l1'] * l1)
                 else:
                     loss = cross_entropy + 0.8 * cluster_cost - 0.08 * separation_cost + 1e-4 * l1 + 0.1 * sim_diff_loss
             else:
                 if coefs is not None:
                     loss = (coefs['crs_ent'] * cross_entropy
-                          + coefs['clst'] * cluster_cost
-                          + coefs['l1'] * l1)
+                            + coefs['clst'] * cluster_cost
+                            + coefs['l1'] * l1)
                 else:
                     loss = cross_entropy + 0.8 * cluster_cost + 1e-4 * l1
             if neptune_run is not None:
@@ -188,16 +196,14 @@ def _train_or_test(model, dataloader, optimizer=None, class_specific=True, use_l
         del predicted
         del min_distances
 
-    end = time.time()
-
     # log('\ttime: \t{0}'.format(end - start))
     # if is_train:
-        # log('t\loss: \t{0}'.format(total_loss / n_batches))
+    # log('t\loss: \t{0}'.format(total_loss / n_batches))
     # log('\tcross ent: \t{0}'.format(total_cross_entropy / n_batches))
     # log('\tcluster: \t{0}'.format(total_cluster_cost / n_batches))
     # if class_specific:
-        # log('\tseparation:\t{0}'.format(total_separation_cost / n_batches))
-        # log('\tavg separation:\t{0}'.format(total_avg_separation_cost / n_batches))
+    # log('\tseparation:\t{0}'.format(total_separation_cost / n_batches))
+    # log('\tavg separation:\t{0}'.format(total_avg_separation_cost / n_batches))
     # log('\taccu: \t\t{0}%'.format(n_correct / n_examples * 100))
     # l1 = model.module.last_layer.weight.norm(p=1).item()
     # log('\tl1: \t\t{0}'.format(l1))
@@ -206,7 +212,7 @@ def _train_or_test(model, dataloader, optimizer=None, class_specific=True, use_l
         p_avg_pair_dist = torch.mean(list_of_distances(p, p)).item()
     # log('\tp dist pair: \t{0}'.format(p_avg_pair_dist))
     # if isinstance(sim_diff_loss, torch.Tensor):
-        # sim_diff_loss = sim_diff_loss.item()
+    # sim_diff_loss = sim_diff_loss.item()
     # log('\tsim diff:  \t{0}'.format(sim_diff_loss))
 
     converged = total_cluster_cost < total_separation_cost
@@ -218,10 +224,8 @@ def _train_or_test(model, dataloader, optimizer=None, class_specific=True, use_l
         'avg_separation': total_avg_separation_cost,
         'l1': l1,
         'p_avg_pair_dist': p_avg_pair_dist,
+        'sim_diff_loss': total_sim_diff_loss / n_batches
     }
-
-    if masking_type != 'none':
-        metrics['sim_diff_loss'] = total_sim_diff_loss / n_batches
 
     if is_train:
         metrics['loss'] = total_loss / n_batches
@@ -231,7 +235,7 @@ def _train_or_test(model, dataloader, optimizer=None, class_specific=True, use_l
 
 def train(model, dataloader, optimizer, class_specific=False, coefs=None, log=print, masking_type='none',
           neptune_run=None, quantized_mask=False, sim_diff_weight=0.0, sim_diff_function='l1'):
-    assert(optimizer is not None)
+    assert (optimizer is not None)
     model.train()
     return _train_or_test(model=model, dataloader=dataloader, optimizer=optimizer,
                           class_specific=class_specific, coefs=coefs, log=log, masking_type=masking_type,
@@ -256,7 +260,7 @@ def last_only(model, log=print):
     model.module.prototype_vectors.requires_grad = False
     for p in model.module.last_layer.parameters():
         p.requires_grad = True
-    
+
     log('\tlast layer')
 
 
@@ -268,7 +272,7 @@ def warm_only(model, log=print):
     model.module.prototype_vectors.requires_grad = True
     for p in model.module.last_layer.parameters():
         p.requires_grad = True
-    
+
     log('\twarm')
 
 
@@ -280,5 +284,5 @@ def joint(model, log=print):
     model.module.prototype_vectors.requires_grad = True
     for p in model.module.last_layer.parameters():
         p.requires_grad = True
-    
+
     log('\tjoint')
