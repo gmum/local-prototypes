@@ -50,7 +50,7 @@ ppnet_multi = torch.nn.DataParallel(ppnet)
 class_specific = True
 
 # load the data
-from settings import train_dir, test_dir, train_push_dir, NEPTUNE_API_TOKEN, num_workers
+from settings import train_dir, test_dir, train_push_dir, NEPTUNE_API_TOKEN, num_workers, coefs
 
 train_batch_size = 80
 test_batch_size = 100
@@ -137,13 +137,6 @@ if optimize_last_layer:
         neptune_run = None
     last_layer_optimizer_specs = [{'params': ppnet.last_layer.parameters(), 'lr': 1e-4}]
     last_layer_optimizer = torch.optim.Adam(last_layer_optimizer_specs)
-
-    coefs = {
-        'crs_ent': 1,
-        'clst': 0.8,
-        'sep': -0.08,
-        'l1': 1e-4,
-    }
 
     log('optimize last layer')
     tnt.last_only(model=ppnet_multi, log=log)

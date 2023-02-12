@@ -145,8 +145,8 @@ def _train_or_test(model, dataloader, optimizer=None, class_specific=True, use_l
         if is_train:
             if class_specific:
                 if coefs is not None:
-                    sim_diff_weight = coefs['sim_diff_random'] if masking_type == 'random' \
-                        else coefs['sim_diff_high_act']
+                    sim_diff_weight = coefs.get('sim_diff_random', 0.0) if masking_type == 'random' \
+                        else coefs.get('sim_diff_high_act', 0.0)
                     loss = (coefs['crs_ent'] * cross_entropy
                           + coefs['clst'] * cluster_cost
                           + coefs['sep'] * separation_cost
