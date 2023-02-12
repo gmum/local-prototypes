@@ -171,4 +171,6 @@ if optimize_last_layer:
     if neptune_run is not None:
         neptune_run.stop()
 
+    log(f'{original_experiment_name} PRUNING ACCURACY:  {accu:.4f}')
+
 logclose()
