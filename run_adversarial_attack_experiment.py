@@ -94,7 +94,7 @@ def get_activation_change_metrics(act_before, act_after, proto_nums):
 
 
 def run_adversarial_attack_on_prototypes(args):
-    experiment_output_dir = os.path.join(results_dir, 'adversarial_attack')
+    experiment_output_dir = os.path.join(results_dir, args.output_dir)
     os.makedirs(experiment_output_dir, exist_ok=True)
 
     metrics_mean, metrics_all = {}, {}
@@ -279,6 +279,8 @@ if __name__ == '__main__':
     parser.add_argument('model_checkpoints', nargs='+', type=str,
                         help='Paths to the checkpoints (.pth files) of the evaluated models')
     parser.add_argument('--model_keys', nargs='+', type=str, help='Names for the models to display in plot titles')
+
+    parser.add_argument('--output_dir', type=str, help='Name of the output directory in RESULTS_PATH')
 
     parser.add_argument('--n_jobs', type=int, default=4, help='Number of parallel jobs (for DataLoader)')
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size for using the model')
