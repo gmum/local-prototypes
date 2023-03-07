@@ -2,6 +2,7 @@ import os
 
 import torch
 from torch import nn
+from torch.utils.data import Dataset
 from torchvision import datasets, transforms
 
 from preprocess import mean, std
@@ -28,30 +29,22 @@ def run_model_on_batch(
     return predicted_cls.cpu().detach().numpy(), patch_activations
 
 
-def run_model_on_image_folder(
-        model: torch.nn.Module,
-        directory: str,
+def run_model_on_dataset(
+        model: nn.Module,
+        dataset: Dataset,
         num_workers: int,
         batch_size: int
 ):
     """
     Runs the model on all images in the given directory and saves the results.
     :param model: the model to run
-    :param directory: path to the directory containing the images
+    :param dataset: pytorch dataset
     :param num_workers: number of parallel workers for the DataLoader
     :param batch_size: batch size for the DataLoader
     :return a generator of model outputs for each of the images, together with batch data
     """
-    test_dataset = datasets.ImageFolder(
-        directory,
-        transforms.Compose([
-            transforms.Resize(size=(img_size, img_size)),
-            transforms.ToTensor(),
-            normalize,
-        ]))
-
     test_loader = torch.utils.data.DataLoader(
-        test_dataset,
+        dataset,
         batch_size=batch_size,
         shuffle=False,
         num_workers=num_workers,
@@ -61,7 +54,10 @@ def run_model_on_image_folder(
     current_idx = 0
 
     for img_tensor, target in test_loader:
-        batch_samples = test_dataset.samples[current_idx:current_idx + batch_size]
+        if torch.cuda.is_available():
+            img_tensor = img_tensor.cuda()
+
+        batch_samples = dataset.samples[current_idx:current_idx + batch_size]
         batch_filenames = [os.path.basename(s[0]) for s in batch_samples]
         with torch.no_grad():
             predicted_cls, patch_activations = run_model_on_batch(
