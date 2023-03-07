@@ -15,7 +15,7 @@ from settings import img_size
 def get_all_class_proto_low_activation_bbox_mask(
         proto_nums: List[np.ndarray],
         activations: np.ndarray,
-        epsilon_pixels: int = 10,
+        epsilon_pixels: int = 5,
 ) -> np.ndarray:
     """
     Get a mask that has 0 on pixels within high activation bounding box of any of the ground truth prototypes.
