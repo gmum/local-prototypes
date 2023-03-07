@@ -38,8 +38,7 @@ class PPNetAdversarialWrapper(nn.Module):
     def forward(self, x):
         # 'x' can be modified by cleverhans
         # 'x2' is the actual output image. We use masking to ensure that cleverhans can affect only the masked pixels.
-        # x2 = x * self.mask + self.img * (1 - self.mask)
-        x2 = x
+        x2 = x * self.mask + self.img * (1 - self.mask)
 
         conv_output, distances = self.model.push_forward(x2)
         distances = distances[:, self.proto_nums]

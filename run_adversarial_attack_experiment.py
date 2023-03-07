@@ -98,9 +98,21 @@ def run_adversarial_attack_on_prototypes(args):
     experiment_output_dir = os.path.join(results_dir, args.output_dir)
     os.makedirs(experiment_output_dir, exist_ok=True)
 
+    test_dataset = datasets.ImageFolder(
+        test_dir,
+        transforms.Compose([
+            transforms.Resize(size=(img_size, img_size)),
+            transforms.ToTensor(),
+            normalize,
+        ]))
+    if args.n_samples != -1:
+        random_idx = np.random.choice(np.arange(len(test_dataset)), replace=False, size=args.n_samples)
+        subset_test_dataset = Subset(test_dataset, random_idx)
+        setattr(subset_test_dataset, 'samples', [test_dataset.samples[i] for i in random_idx])
+        test_dataset = subset_test_dataset
+
     metrics_mean, metrics_all = {}, {}
-    for ch_path, model_key in tqdm(zip(args.model_checkpoints, args.model_keys),
-                                   desc=f'running experiment on {len(args.model_checkpoints)} models'):
+    for ch_path, model_key in zip(args.model_checkpoints, args.model_keys):
         print(f'Loading model {model_key} from {ch_path}...')
         if torch.cuda.is_available():
             model = torch.load(ch_path).cuda()
@@ -114,21 +126,9 @@ def run_adversarial_attack_on_prototypes(args):
         output_top_k_dir = os.path.join(model_output_dir, 'adversarial_images_summaries_cherrypicked')
         os.makedirs(output_top_k_dir, exist_ok=True)
 
-        test_dataset = datasets.ImageFolder(
-            test_dir,
-            transforms.Compose([
-                transforms.Resize(size=(img_size, img_size)),
-                transforms.ToTensor(),
-                normalize,
-            ]))
-        if args.n_samples != -1:
-            random_idx = np.random.choice(np.arange(len(test_dataset)), replace=False, size=args.n_samples)
-            test_dataset = Subset(test_dataset, random_idx)
-
         pbar = tqdm(total=len(test_dataset))
 
         n_samples, n_correct_before, n_correct_after = 0, 0, 0
-
         metrics = defaultdict(list)
 
         top_k_save = 20
