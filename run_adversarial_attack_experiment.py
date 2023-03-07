@@ -107,8 +107,6 @@ def run_adversarial_attack_on_prototypes(args):
             model = torch.load(ch_path, map_location=torch.device('cpu'))
 
         model_output_dir = os.path.join(experiment_output_dir, model_key)
-        output_adv_img_dir_all = os.path.join(model_output_dir, 'adversarial_images_all')
-        os.makedirs(output_adv_img_dir_all, exist_ok=True)
         output_adv_img_dir_summaries = os.path.join(model_output_dir, 'adversarial_images_summaries')
         os.makedirs(output_adv_img_dir_summaries, exist_ok=True)
 
@@ -123,14 +121,13 @@ def run_adversarial_attack_on_prototypes(args):
                 normalize,
             ]))
 
-        n_batches = int(np.ceil(len(test_dataset)) / args.batch_size)
-        pbar = tqdm(total=n_batches)
+        pbar = tqdm(total=len(test_dataset))
 
         n_samples, n_correct_before, n_correct_after = 0, 0, 0
 
         metrics = defaultdict(list)
 
-        top_k_save = 10
+        top_k_save = 20
         top_k_examples, top_k_examples_diffs = [], []
 
         for batch_result in run_model_on_dataset(
@@ -198,14 +195,17 @@ def run_adversarial_attack_on_prototypes(args):
                 all_img = [img_original, overlayed_img_original, img_modified, modified_masked, overlayed_img_modified]
                 all_img_desc = ['original', 'original_heatmap', 'modified', 'attack_mask', 'modified_heatmap']
 
-                for im, desc in zip(all_img, all_img_desc):
-                    plt.figure(figsize=(5, 5))
-                    plt.imshow(im, vmin=0, vmax=1)
-                    plt.axis('off')
-                    plt.savefig(os.path.join(output_adv_img_dir_all,
-                                             filename.replace(f'.{extension}', f'_{desc}.{extension}')),
-                                bbox_inches='tight', pad_inches=0)
-                    plt.close()
+                # uncomment to save all individual images
+                # output_adv_img_dir_all = os.path.join(model_output_dir, 'adversarial_images_all')
+                # os.makedirs(output_adv_img_dir_all, exist_ok=True)
+                # for im, desc in zip(all_img, all_img_desc):
+                    # plt.figure(figsize=(5, 5))
+                    # plt.imshow(im, vmin=0, vmax=1)
+                    # plt.axis('off')
+                    # plt.savefig(os.path.join(output_adv_img_dir_all,
+                                             # filename.replace(f'.{extension}', f'_{desc}.{extension}')),
+                                # bbox_inches='tight', pad_inches=0)
+                    # plt.close()
 
                 plt.figure(figsize=(25, 5))
                 for img_i, (im, desc) in enumerate(zip(all_img, all_img_desc)):
@@ -232,11 +232,11 @@ def run_adversarial_attack_on_prototypes(args):
                     top_k_examples_diffs.append(top_proto_act_diff)
                     shutil.copy(os.path.join(output_adv_img_dir_summaries, filename),
                                 os.path.join(output_top_k_dir, filename))
+                pbar.update()
 
             acc1 = n_correct_before / n_samples * 100
             acc2 = n_correct_after / n_samples * 100
             pbar.set_description('Running model + attack. Accuracy before: {:.2f}%, after: {:.2f}%)'.format(acc1, acc2))
-            pbar.update()
 
         pbar.close()
 
@@ -282,8 +282,8 @@ if __name__ == '__main__':
 
     parser.add_argument('--output_dir', type=str, help='Name of the output directory in RESULTS_PATH')
 
-    parser.add_argument('--n_jobs', type=int, default=4, help='Number of parallel jobs (for DataLoader)')
-    parser.add_argument('--batch_size', type=int, default=32, help='Batch size for using the model')
+    parser.add_argument('--n_jobs', type=int, default=16, help='Number of parallel jobs (for DataLoader)')
+    parser.add_argument('--batch_size', type=int, default=256, help='Batch size for using the model')
 
     # parameters for the adversarial attack
     parser.add_argument('--epsilon', type=float, default=0.5,

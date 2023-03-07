@@ -86,10 +86,6 @@ def attack_images_target_class_prototypes(
             eps_iter=epsilon_iter,
             nb_iter=nb_iter,
             norm=np.inf,
-            # we want to decrease the "logit probability of class zero", which we dummy-replace
-            # with the mean activation over ground truth prototypes
-            # y=torch.zeros(len(sample_img), dtype=torch.long, device=img.device),
-            # targeted=False
         )
         img_modified.append(sample_modified)
         activations_before.append(wrapper.initial_activation)
