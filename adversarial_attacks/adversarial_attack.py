@@ -74,7 +74,7 @@ def attack_images_target_class_prototypes(
         for sample_act in activations:
             proto_max_act = np.max(sample_act.reshape(sample_act.shape[0], -1), axis=-1)
             proto_max_act = np.argmax(proto_max_act)
-            proto_nums.append([int(proto_max_act)])
+            proto_nums.append(np.asarray([int(proto_max_act)]))
     else:
         raise ValueError(attack_type)
 

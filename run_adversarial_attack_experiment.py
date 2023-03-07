@@ -248,7 +248,7 @@ def run_adversarial_attack_on_prototypes(args):
 
             acc1 = n_correct_before / n_samples * 100
             acc2 = n_correct_after / n_samples * 100
-            pbar.set_description('Running model + attack. Accuracy before: {:.2f}%, after: {:.2f}%)'.format(acc1, acc2))
+            pbar.set_description('{:s}. Acc before: {:.2f}%, after: {:.2f}%)'.format(model_key, acc1, acc2))
 
         pbar.close()
 
