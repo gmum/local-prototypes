@@ -5,7 +5,7 @@ If they are local, the adversarial attack should not be successful.
 
 Example usage:
 
-python run_adversarial_attack_experiment.py results/2023_01_23_resnet_34_mask_high_act_1/push_best.pth --model_keys baseline
+python run_adversarial_attack_experiment.py results/2023_01_23_resnet_34_mask_high_act_1/push_best.pth --model_keys baseline --output_dir experiment1
 """
 import json
 import argparse
@@ -19,6 +19,7 @@ import cv2
 import numpy as np
 import torch
 from matplotlib import pyplot as plt
+from torch.utils.data import Subset
 from torchvision import datasets, transforms
 from tqdm import tqdm
 
@@ -120,6 +121,9 @@ def run_adversarial_attack_on_prototypes(args):
                 transforms.ToTensor(),
                 normalize,
             ]))
+        if args.n_samples != -1:
+            random_idx = np.random.choice(np.arange(len(test_dataset)), replace=False, size=args.n_samples)
+            test_dataset = Subset(test_dataset, random_idx)
 
         pbar = tqdm(total=len(test_dataset))
 
@@ -156,7 +160,6 @@ def run_adversarial_attack_on_prototypes(args):
 
             n_correct_after += np.sum(predicted_cls_adv == batch_result['target'])
 
-            extension = 'jpg'
             for sample_i in range(len(batch_result['filenames'])):
                 filename = batch_result['filenames'][sample_i]
                 img_original = batch_result['img_original_numpy'][sample_i]
@@ -198,6 +201,7 @@ def run_adversarial_attack_on_prototypes(args):
                 # uncomment to save all individual images
                 # output_adv_img_dir_all = os.path.join(model_output_dir, 'adversarial_images_all')
                 # os.makedirs(output_adv_img_dir_all, exist_ok=True)
+                # extension = 'jpg'
                 # for im, desc in zip(all_img, all_img_desc):
                     # plt.figure(figsize=(5, 5))
                     # plt.imshow(im, vmin=0, vmax=1)
@@ -216,7 +220,6 @@ def run_adversarial_attack_on_prototypes(args):
                 plt.tight_layout()
                 plt.savefig(os.path.join(output_adv_img_dir_summaries, filename),
                             bbox_inches='tight', pad_inches=0.2)
-                plt.close()
                 plt.close()
 
                 # save some cherry-picked samples where activation change is the biggest
@@ -282,8 +285,9 @@ if __name__ == '__main__':
 
     parser.add_argument('--output_dir', type=str, help='Name of the output directory in RESULTS_PATH')
 
-    parser.add_argument('--n_jobs', type=int, default=16, help='Number of parallel jobs (for DataLoader)')
-    parser.add_argument('--batch_size', type=int, default=256, help='Batch size for using the model')
+    parser.add_argument('--n_samples', type=int, default=-1, help='Number of samples (-1 == all test set)')
+    parser.add_argument('--n_jobs', type=int, default=8, help='Number of parallel jobs (for DataLoader)')
+    parser.add_argument('--batch_size', type=int, default=8, help='Batch size for using the model')
 
     # parameters for the adversarial attack
     parser.add_argument('--epsilon', type=float, default=0.5,
