@@ -15,7 +15,7 @@ data_path = os.environ['DATA_PATH']
 train_dir = os.path.join(data_path, os.environ['TRAIN_DIR'])
 test_dir = os.path.join(data_path, os.environ['TEST_DIR'])
 train_push_dir = os.path.join(data_path, os.environ['TRAIN_PUSH_DIR'])
-results_dir = os.path.join(data_path, os.environ['RESULTS_DIR'])
+results_dir = os.path.join(os.environ['RESULTS_DIR'])
 
 # local
 # data_path = '/media/mikolaj/HDD/ml_data/CUB/'
