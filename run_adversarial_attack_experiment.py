@@ -82,14 +82,21 @@ def get_activation_change_metrics(act_before, act_after, proto_nums):
     metrics['top_proto_place_diff'] = argmax_place_after - argmax_place_before
 
     # same metric as above but for all the prototypes of the target class
-    places_before, places_after = [], []
+    places_before, places_after, acts_before, acts_after = [], [], [], []
     for proto_num in proto_nums:
         places_before.append(float(np.sum(max_activations_before > max_activations_before[proto_num])))
         places_after.append(float(np.sum(max_activations_after > max_activations_after[proto_num])))
 
+        acts_before.append(float(max_activations_before[proto_num]))
+        acts_after.append(float(max_activations_after[proto_num]))
+
     metrics['proto_place_before'] = places_before
     metrics['proto_place_after'] = places_after
     metrics['proto_place_diff'] = [p1 - p2 for p1, p2 in zip(places_after, places_before)]
+
+    metrics['proto_act_before'] = acts_before
+    metrics['proto_act_after'] = acts_after
+    metrics['proto_act_diff'] = [a1 - a2 for a1, a2 in zip(acts_after, acts_before)]
 
     return metrics
 
@@ -294,7 +301,7 @@ if __name__ == '__main__':
                         help='Maximum perturbation of the adversarial attack')
     parser.add_argument('--epsilon_iter', type=float, default=0.05,
                         help='Maximum perturbation of the adversarial attack within one iteration')
-    parser.add_argument('--nb_iter', type=iter, default=20,
+    parser.add_argument('--nb_iter', type=iter, default=10,
                         help='Number of iterations of the adversarial attack')
 
     run_adversarial_attack_on_prototypes(parser.parse_args())
