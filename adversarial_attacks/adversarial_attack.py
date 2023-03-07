@@ -47,6 +47,7 @@ def attack_images_target_class_prototypes(
         model: nn.Module,
         img: torch.tensor,
         activations: np.ndarray,
+        attack_type: str,
         cls: np.ndarray,
         epsilon: float = 0.1,
         epsilon_iter: float = 0.01,
@@ -58,13 +59,24 @@ def attack_images_target_class_prototypes(
     :param model: PPNet model
     :param img: a batch of images to attack [B, C, W, H]
     :param activations: a numpy array with prototype activations over image patches of shape [B, P, Wp, Hp]
+    :param attack_type: type of attack, in terms of the attacked prototypes
     :param cls: a vector ground truth classes of the images
     :param epsilon: maximum perturbation of the adversarial attack
     :param epsilon_iter: maximum perturbation of the adversarial attack within one iteration
     :param nb_iter: number of iterations of the adversarial attack
     :return: a dictionary contained the modified images and the mask of the region of the attack
     """
-    proto_nums = [np.argwhere(model.prototype_class_identity.cpu().detach().numpy()[:, c] == 1).flatten() for c in cls]
+    if attack_type == 'gt_protos':
+        proto_nums = [np.argwhere(model.prototype_class_identity.cpu().detach().numpy()[:, c] == 1).flatten()
+                      for c in cls]
+    elif attack_type == 'top_proto':
+        proto_nums = []
+        for sample_act in activations:
+            proto_max_act = np.max(sample_act.reshape(sample_act.shape[0], -1), axis=-1)
+            proto_max_act = np.argmax(proto_max_act)
+            proto_nums.append([int(proto_max_act)])
+    else:
+        raise ValueError(attack_type)
 
     mask = get_all_class_proto_low_activation_bbox_mask(
         proto_nums=proto_nums,

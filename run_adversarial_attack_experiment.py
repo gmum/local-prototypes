@@ -74,29 +74,30 @@ def get_activation_change_metrics(act_before, act_after, proto_nums):
     max_activations_before = np.max(act_before.reshape(act_before.shape[0], -1), axis=-1)
     max_activations_after = np.max(act_after.reshape(act_after.shape[0], -1), axis=-1)
 
-    argmax_place_before = float(np.sum(max_activations_before > max_activations_before[argmax_act]))
-    argmax_place_after = float(np.sum(max_activations_after > max_activations_after[argmax_act]))
+    argmax_place_before = float(np.sum(max_activations_before > max_activations_before[proto_nums[argmax_act]]))
+    argmax_place_after = float(np.sum(max_activations_after > max_activations_after[proto_nums[argmax_act]]))
 
     metrics['top_proto_place_before'] = argmax_place_before
     metrics['top_proto_place_after'] = argmax_place_after
     metrics['top_proto_place_diff'] = argmax_place_after - argmax_place_before
 
-    # same metric as above but for all the prototypes of the target class
-    places_before, places_after, acts_before, acts_after = [], [], [], []
-    for proto_num in proto_nums:
-        places_before.append(float(np.sum(max_activations_before > max_activations_before[proto_num])))
-        places_after.append(float(np.sum(max_activations_after > max_activations_after[proto_num])))
+    if len(proto_nums) > 1:
+        # same metric as above but for all the prototypes of the target class
+        places_before, places_after, acts_before, acts_after = [], [], [], []
+        for proto_num in proto_nums:
+            places_before.append(float(np.sum(max_activations_before > max_activations_before[proto_num])))
+            places_after.append(float(np.sum(max_activations_after > max_activations_after[proto_num])))
 
-        acts_before.append(float(max_activations_before[proto_num]))
-        acts_after.append(float(max_activations_after[proto_num]))
+            acts_before.append(float(max_activations_before[proto_num]))
+            acts_after.append(float(max_activations_after[proto_num]))
 
-    metrics['proto_place_before'] = places_before
-    metrics['proto_place_after'] = places_after
-    metrics['proto_place_diff'] = [p1 - p2 for p1, p2 in zip(places_after, places_before)]
+        metrics['proto_place_before'] = places_before
+        metrics['proto_place_after'] = places_after
+        metrics['proto_place_diff'] = [p1 - p2 for p1, p2 in zip(places_after, places_before)]
 
-    metrics['proto_act_before'] = acts_before
-    metrics['proto_act_after'] = acts_after
-    metrics['proto_act_diff'] = [a1 - a2 for a1, a2 in zip(acts_after, acts_before)]
+        metrics['proto_act_before'] = acts_before
+        metrics['proto_act_after'] = acts_after
+        metrics['proto_act_diff'] = [a1 - a2 for a1, a2 in zip(acts_after, acts_before)]
 
     return metrics
 
@@ -151,6 +152,7 @@ def run_adversarial_attack_on_prototypes(args):
                 model=model,
                 img=batch_result['img_tensor'],
                 activations=batch_result['patch_activations'],
+                attack_type=args.attack_type,
                 cls=batch_result['target'],
                 epsilon=args.epsilon,
                 epsilon_iter=args.epsilon_iter,
@@ -285,6 +287,8 @@ def run_adversarial_attack_on_prototypes(args):
 
 
 if __name__ == '__main__':
+    np.random.seed(1234)
+
     parser = argparse.ArgumentParser(description='Adversarially attack prototypes')
     parser.add_argument('model_checkpoints', nargs='+', type=str,
                         help='Paths to the checkpoints (.pth files) of the evaluated models')
@@ -292,9 +296,15 @@ if __name__ == '__main__':
 
     parser.add_argument('--output_dir', type=str, help='Name of the output directory in RESULTS_PATH')
 
-    parser.add_argument('--n_samples', type=int, default=-1, help='Number of samples (-1 == all test set)')
+    parser.add_argument('--n_samples', type=int, default=500, help='Number of samples (-1 == all test set)')
     parser.add_argument('--n_jobs', type=int, default=8, help='Number of parallel jobs (for DataLoader)')
     parser.add_argument('--batch_size', type=int, default=8, help='Batch size for using the model')
+
+    parser.add_argument('--attack_type', type=str, default='top_proto',
+                        help='Attack type: '
+                             '"top_proto" - attack top predicted prototype, '
+                             '"gt_protos" - attack all prototypes of the ground truth class'
+                        )
 
     # parameters for the adversarial attack
     parser.add_argument('--epsilon', type=float, default=0.5,
