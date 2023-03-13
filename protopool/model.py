@@ -145,7 +145,10 @@ class PrototypeChooser(nn.Module):
             proto_presence = gumbel_softmax(self.proto_presence * gumbel_scale, dim=1, tau=0.5)
 
         distances = self.prototype_distances(x)  # [b, C, H, W] -> [b, p, h, w]
+
         all_similarities = self.distance_2_similarity(distances)
+        all_similarities = torch.einsum('bphw,cpn->bcnhw', all_similarities, proto_presence)
+        all_similarities = all_similarities.flatten(start_dim=1, end_dim=2)
 
         '''
         we cannot refactor the lines below for similarity scores
@@ -167,7 +170,7 @@ class PrototypeChooser(nn.Module):
             x = self.last_layer(x.flatten(start_dim=1))
         else:
             x = x.sum(dim=-1)
-        return x, min_distances, proto_presence, all_similarities  # [b,c,n] [b, p] [c, p, n]
+        return x, min_distances, proto_presence, all_similarities  # [b,c,n] [b, p] [c, p, n], [b, p, w, h]
 
     def _l2_convolution(self, x):
         '''

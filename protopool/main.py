@@ -20,7 +20,6 @@ import cv2
 from utils import mixup_data, compute_proto_layer_rf_info_v2, compute_rf_prototype
 
 
-
 def save_model(model, path, epoch):
     torch.save({
         'model_state_dict': model.state_dict(),
@@ -362,7 +361,7 @@ def learn_model(opt: Optional[List[str]]) -> None:
                             proto_sim = []
                             proto_nums = []
                             for sample_i, sample_label in enumerate(label):
-                                label_protos = model.module.prototype_class_identity[:, sample_label].nonzero()[:, 0]
+                                label_protos = model_multi.module.prototype_class_identity[:, sample_label].nonzero()[:, 0]
                                 proto_num = np.random.choice(label_protos)
                                 proto_nums.append(proto_num)
                                 proto_sim.append(all_similarities[sample_i, proto_num])
@@ -370,7 +369,7 @@ def learn_model(opt: Optional[List[str]]) -> None:
 
                         if args.quantized_mask:
                             all_sim_scaled = torch.nn.functional.interpolate(proto_sim,
-                                                                             size=(input.shape[-1], input.shape[-1]),
+                                                                             size=(data.shape[-1], data.shape[-1]),
                                                                              mode='bilinear')
                             q = np.random.uniform(0.5, 0.98)
                             quantile_mask = torch.quantile(all_sim_scaled.flatten(start_dim=-2), q=q, dim=-1)
@@ -390,10 +389,10 @@ def learn_model(opt: Optional[List[str]]) -> None:
                             proto_sim_norm /= proto_sim_max
                             high_act_mask_act = proto_sim_norm
                             high_act_mask_img = torch.nn.functional.interpolate(high_act_mask_act,
-                                                                                size=(input.shape[-1], input.shape[-1]),
+                                                                                size=(data.shape[-1], data.shape[-1]),
                                                                                 mode='bilinear')
-                        new_input = data * high_act_mask_img
-                        output2, min_distances2, proto_presence2, all_similarities2 = model(new_input.detach(), return_all_similarities=True)
+                        new_data = data * high_act_mask_img
+                        output2, min_distances2, proto_presence2, all_similarities2 = model(new_data.detach())
                         proto_sim2 = []
                         for sample_i, sample_label in enumerate(label):
                             proto_sim2.append(all_similarities2[sample_i, proto_nums[sample_i]])
@@ -516,6 +515,7 @@ def learn_model(opt: Optional[List[str]]) -> None:
             if trn_loss is None:
                 trn_loss = loss.mean().detach()
                 trn_loss = trn_loss.cpu().numpy() / len(train_loader)
+
             print(f'Epoch {epoch}|{args.epochs}, train loss: {trn_loss:.5f}, test loss: {tst_loss.mean():.5f} '
                   f'| acc: {tst_acc:.5f}, orthogonal: {orthogonal_loss.item():.5f} '
                   f'(minimal test-loss: {min_val_loss:.5f}, early stop: {epochs_no_improve}|{args.earlyStopping}) - ')
