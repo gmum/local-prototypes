@@ -9,6 +9,7 @@ import torch
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms, datasets
+from tqdm import tqdm
 
 from model import PrototypeChooser
 from utils import mixup_data, find_high_activation_crop
@@ -91,6 +92,8 @@ def learn_model(opt: Optional[List[str]]) -> None:
     parser.add_argument('--proto_img_dir', type=str, default='img')
     parser.add_argument('--pp_ortho', action='store_true')
     parser.add_argument('--pp_gumbel', action='store_true')
+
+    parser.add_argument('--prog_bar', action='store_true')
 
     if opt is None:
         args, unknown = parser.parse_known_args()
@@ -268,6 +271,9 @@ def learn_model(opt: Optional[List[str]]) -> None:
     epochs_no_improve = 0
 
     epoch_tqdm = range(start_epoch, args.epochs)
+    if args.prog_bar:
+        epoch_tqdm = tqdm(epoch_tqdm, desc='Training model')
+
     steps = False
 
     model_multi = torch.nn.DataParallel(model)
@@ -294,6 +300,8 @@ def learn_model(opt: Optional[List[str]]) -> None:
             ####################################
             trn_loss = 0
             trn_tqdm = enumerate(train_loader, 0)
+            if args.prog_bar:
+                trn_tqdm = tqdm(trn_tqdm, desc=f'Epoch {epoch +  1}', total=len(train_loader))
             if epoch > 0:
                 for i, (data, label) in trn_tqdm:
                     label_p = label.numpy().tolist()
