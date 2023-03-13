@@ -13,8 +13,6 @@ from vgg_features import vgg11_features, vgg11_bn_features, vgg13_features, vgg1
                          vgg19_features, vgg19_bn_features
 import numpy as np
 
-from utils import compute_proto_layer_rf_info_v2
-
 base_architecture_to_features = {'resnet18': resnet18_features,
                                  'resnet34': resnet34_features,
                                  'resnet50': resnet50_features,
@@ -140,14 +138,14 @@ class PrototypeChooser(nn.Module):
         x = self.add_on_layers(x)
         return x
 
-    def forward(self, x: torch.Tensor, gumbel_scale: int = 0) -> \
-            Tuple[torch.Tensor, torch.LongTensor]:
+    def forward(self, x: torch.Tensor, gumbel_scale: int = 0) -> Tuple:
         if gumbel_scale == 0:
             proto_presence = torch.softmax(self.proto_presence, dim=1)
         else:
             proto_presence = gumbel_softmax(self.proto_presence * gumbel_scale, dim=1, tau=0.5)
 
         distances = self.prototype_distances(x)  # [b, C, H, W] -> [b, p, h, w]
+        all_similarities = self.distance_2_similarity(distances)
 
         '''
         we cannot refactor the lines below for similarity scores
@@ -169,7 +167,7 @@ class PrototypeChooser(nn.Module):
             x = self.last_layer(x.flatten(start_dim=1))
         else:
             x = x.sum(dim=-1)
-        return x, min_distances, proto_presence  # [b,c,n] [b, p] [c, p, n]
+        return x, min_distances, proto_presence, all_similarities  # [b,c,n] [b, p] [c, p, n]
 
     def _l2_convolution(self, x):
         '''

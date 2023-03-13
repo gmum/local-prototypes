@@ -94,6 +94,11 @@ def learn_model(opt: Optional[List[str]]) -> None:
     parser.add_argument('--pp_gumbel', action='store_true')
 
     parser.add_argument('--prog_bar', action='store_true')
+    parser.add_argument('--num_workers', default=8, type=int)
+    parser.add_argument('--high_act_loss', action='store_true')
+    parser.add_argument('--quantized_mask', action='store_true')
+    parser.add_argument('--sim_diff_weight', default=1.0, type=float)
+    parser.add_argument('--sim_diff_function', default='l2', type=str)
 
     if opt is None:
         args, unknown = parser.parse_known_args()
@@ -123,7 +128,7 @@ def learn_model(opt: Optional[List[str]]) -> None:
     kwargs = {}
     if device.type == 'cuda':
         torch.cuda.manual_seed(args.seed)
-        kwargs.update({'num_workers': 9, 'pin_memory': True})
+        kwargs.update({'num_workers': args.num_workers, 'pin_memory': True})
 
     transforms_train_test = transforms.Compose([
         transforms.Resize((224, 224)),
@@ -301,7 +306,7 @@ def learn_model(opt: Optional[List[str]]) -> None:
             trn_loss = 0
             trn_tqdm = enumerate(train_loader, 0)
             if args.prog_bar:
-                trn_tqdm = tqdm(trn_tqdm, desc=f'Epoch {epoch +  1}', total=len(train_loader))
+                trn_tqdm = tqdm(trn_tqdm, desc=f'Epoch {epoch}', total=len(train_loader))
             if epoch > 0:
                 for i, (data, label) in trn_tqdm:
                     label_p = label.numpy().tolist()
@@ -313,10 +318,9 @@ def learn_model(opt: Optional[List[str]]) -> None:
                             data, label, 0.5)
 
                     # ===================forward=====================
-                    prob, min_distances, proto_presence = model_multi(
+                    prob, min_distances, proto_presence, all_similarities = model_multi(
                         data, gumbel_scale=gumbel_scalar)
                     np.savez_compressed(f'{dir_checkpoint}/pp_{epoch * 80 + i}.pth', proto_presence.detach().cpu().numpy())
-
 
                     if args.mixup_data:
                         entropy_loss = lam * \
@@ -353,8 +357,67 @@ def learn_model(opt: Optional[List[str]]) -> None:
                         torch.t(model.prototype_class_identity).cuda()
                     l1 = (model.last_layer.weight * l1_mask).norm(p=1)
 
-                    loss = entropy_loss + clst_loss_val * clst_weight + \
-                        sep_loss_val * sep_weight + 1e-4 * l1 + orthogonal_loss 
+                    if args.high_act_loss:
+                        with torch.no_grad():
+                            proto_sim = []
+                            proto_nums = []
+                            for sample_i, sample_label in enumerate(label):
+                                label_protos = model.module.prototype_class_identity[:, sample_label].nonzero()[:, 0]
+                                proto_num = np.random.choice(label_protos)
+                                proto_nums.append(proto_num)
+                                proto_sim.append(all_similarities[sample_i, proto_num])
+                            proto_sim = torch.stack(proto_sim, dim=0).unsqueeze(1)
+
+                        if args.quantized_mask:
+                            all_sim_scaled = torch.nn.functional.interpolate(proto_sim,
+                                                                             size=(input.shape[-1], input.shape[-1]),
+                                                                             mode='bilinear')
+                            q = np.random.uniform(0.5, 0.98)
+                            quantile_mask = torch.quantile(all_sim_scaled.flatten(start_dim=-2), q=q, dim=-1)
+                            quantile_mask = quantile_mask.unsqueeze(-1).unsqueeze(-1)
+
+                            high_act_mask_img = (all_sim_scaled > quantile_mask).float()
+                            high_act_mask_act = torch.nn.functional.interpolate(high_act_mask_img,
+                                                                                size=(all_similarities.shape[-1],
+                                                                                      all_similarities.shape[-1]),
+                                                                                mode='bilinear')
+                        else:
+                            proto_sim_min = proto_sim.flatten(start_dim=1).min(-1)[0] \
+                                .unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
+                            proto_sim_norm = proto_sim - proto_sim_min
+                            proto_sim_max = proto_sim_norm.flatten(start_dim=1).max(-1)[0] \
+                                .unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
+                            proto_sim_norm /= proto_sim_max
+                            high_act_mask_act = proto_sim_norm
+                            high_act_mask_img = torch.nn.functional.interpolate(high_act_mask_act,
+                                                                                size=(input.shape[-1], input.shape[-1]),
+                                                                                mode='bilinear')
+                        new_input = data * high_act_mask_img
+                        output2, min_distances2, proto_presence2, all_similarities2 = model(new_input.detach(), return_all_similarities=True)
+                        proto_sim2 = []
+                        for sample_i, sample_label in enumerate(label):
+                            proto_sim2.append(all_similarities2[sample_i, proto_nums[sample_i]])
+                        proto_sim2 = torch.stack(proto_sim2, dim=0).unsqueeze(1)
+
+                        if args.sim_diff_function == 'l2':
+                            sim_diff = (proto_sim - proto_sim2) ** 2
+                        elif args.sim_diff_function == 'l1':
+                            sim_diff = torch.abs(proto_sim - proto_sim2)
+                        else:
+                            raise ValueError(f'Unknown sim_diff_function: ', args.sim_diff_function)
+
+                        if args.quantized_mask:
+                            sim_diff_loss = torch.sum(sim_diff * high_act_mask_act) / torch.sum(high_act_mask_act)
+                        else:
+                            sim_diff_loss = torch.mean(sim_diff)
+
+                        loss = entropy_loss + clst_loss_val * clst_weight + \
+                               sep_loss_val * sep_weight + 1e-4 * l1 + orthogonal_loss + \
+                               args.sim_diff_weight * sim_diff_loss
+                    else:
+                        loss = entropy_loss + clst_loss_val * clst_weight + \
+                            sep_loss_val * sep_weight + 1e-4 * l1 + orthogonal_loss
+                        sim_diff_loss = None
 
                     # ===================backward====================
                     optimizer.zero_grad()
@@ -375,6 +438,11 @@ def learn_model(opt: Optional[List[str]]) -> None:
                         'train/avg_sep', avg_separation_cost.item(), epoch * len(train_loader) + i)
                     writer.add_scalar(
                         'train/orthogonal_loss', orthogonal_loss.item(), epoch * len(train_loader) + i)
+
+                    if sim_diff_loss is not None:
+                        writer.add_scalar(
+                            'train/sim_diff_loss', sim_diff_loss.item(), epoch * len(train_loader) + i)
+
                     trn_loss += loss.item()
                 trn_loss /= len(train_loader)
             if steps:
@@ -396,7 +464,7 @@ def learn_model(opt: Optional[List[str]]) -> None:
 
                     # ===================forward=====================
 
-                    prob, min_distances, proto_presence = model_multi(data, gumbel_scale=gumbel_scalar)
+                    prob, min_distances, proto_presence, all_similarities = model_multi(data, gumbel_scale=gumbel_scalar)
 
                     loss = criterion(prob, label)
                     entropy_loss = loss
@@ -494,7 +562,7 @@ def learn_model(opt: Optional[List[str]]) -> None:
             label = label.to(device)
 
             # ===================forward=====================
-            prob, min_distances, proto_presence = model_multi(data, gumbel_scale=10e3)
+            prob, min_distances, proto_presence, all_similarities = model_multi(data, gumbel_scale=10e3)
 
             loss = criterion(prob, label)
             entropy_loss = loss
@@ -574,7 +642,7 @@ def learn_model(opt: Optional[List[str]]) -> None:
                 data, targets_a, targets_b, lam = mixup_data(data, label, 0.5)
 
             # ===================forward=====================
-            prob, min_distances, proto_presence = model_multi(data, gumbel_scale=10e3)
+            prob, min_distances, proto_presence, all_similarities = model_multi(data, gumbel_scale=10e3)
 
             if args.mixup_data:
                 entropy_loss = lam * \
@@ -612,7 +680,7 @@ def learn_model(opt: Optional[List[str]]) -> None:
                 label = label.to(device)
 
                 # ===================forward=====================
-                prob, min_distances, proto_presence = model_multi(data, gumbel_scale=10e3)
+                prob, min_distances, proto_presence, all_similarities = model_multi(data, gumbel_scale=10e3)
 
                 loss = criterion(prob, label)
                 entropy_loss = loss
