@@ -2,11 +2,12 @@ import os
 
 import torch
 from torch import nn
+from torch.nn.functional import gumbel_softmax
+import torch.nn.functional as F
 from torch.utils.data import Dataset
-from torchvision import datasets, transforms
+from torchvision import transforms
 
 from preprocess import mean, std
-from settings import img_size
 
 normalize = transforms.Normalize(mean=mean, std=std)
 
@@ -14,17 +15,42 @@ normalize = transforms.Normalize(mean=mean, std=std)
 def run_model_on_batch(
         model: torch.nn.Module,
         batch: torch.Tensor,
+        proto_pool: bool = False
 ):
-    _, patch_distances = model.push_forward(batch)
+    _, distances = model.push_forward(batch)
 
-    # get model prediction
-    min_distances = -nn.functional.max_pool2d(-patch_distances,
-                                              kernel_size=(patch_distances.size()[2],
-                                                           patch_distances.size()[3]))
-    min_distances = min_distances.view(-1, model.num_prototypes)
-    prototype_activations = model.distance_2_similarity(min_distances)
-    predicted_cls = torch.argmax(torch.softmax(model.last_layer(prototype_activations), dim=-1), dim=-1)
-    patch_activations = model.distance_2_similarity(patch_distances).cpu().detach().numpy()
+    if proto_pool:
+        # global min pooling
+        min_distances = -F.max_pool2d(-distances,
+                                      kernel_size=(distances.size()[2],
+                                                   distances.size()[3])).squeeze()  # [b, p]
+        avg_dist = F.avg_pool2d(distances, kernel_size=(distances.size()[2],
+                                                        distances.size()[3])).squeeze()  # [b, p]
+
+        gumbel_scale = 10e3
+        with torch.no_grad():
+            proto_presence = gumbel_softmax(model.proto_presence * gumbel_scale, dim=1, tau=0.5)
+
+        # noinspection PyProtectedMember
+        min_mixed_distances = model._mix_l2_convolution(min_distances, proto_presence)  # [b, c, n]
+        # noinspection PyProtectedMember
+        avg_mixed_distances = model._mix_l2_convolution(avg_dist, proto_presence)  # [b, c, n]
+        x = model.distance_2_similarity(min_mixed_distances)  # [b, c, n]
+        x_avg = model.distance_2_similarity(avg_mixed_distances)  # [b, c, n]
+        x = x - x_avg
+        if model.use_last_layer:
+            prototype_activations = x.flatten(start_dim=1)
+        else:
+            raise NotImplementedError('Not implemented for proto_pool')
+    else:
+        min_distances = -nn.functional.max_pool2d(-distances,
+                                                  kernel_size=(distances.size()[2],
+                                                               distances.size()[3]))
+        min_distances = min_distances.view(-1, model.num_prototypes)
+        prototype_activations = model.distance_2_similarity(min_distances)
+
+    patch_activations = model.distance_2_similarity(distances).cpu().detach().numpy()
+    predicted_cls = torch.argmax(model.last_layer(prototype_activations), dim=-1)
 
     return predicted_cls.cpu().detach().numpy(), patch_activations
 
@@ -33,7 +59,8 @@ def run_model_on_dataset(
         model: nn.Module,
         dataset: Dataset,
         num_workers: int,
-        batch_size: int
+        batch_size: int,
+        proto_pool: bool = False,
 ):
     """
     Runs the model on all images in the given directory and saves the results.
@@ -41,6 +68,7 @@ def run_model_on_dataset(
     :param dataset: pytorch dataset
     :param num_workers: number of parallel workers for the DataLoader
     :param batch_size: batch size for the DataLoader
+    :param proto_pool: whether the model is ProtoPool
     :return a generator of model outputs for each of the images, together with batch data
     """
     test_loader = torch.utils.data.DataLoader(
@@ -61,7 +89,7 @@ def run_model_on_dataset(
         batch_filenames = [os.path.basename(s[0]) for s in batch_samples]
         with torch.no_grad():
             predicted_cls, patch_activations = run_model_on_batch(
-                model=model, batch=img_tensor
+                model=model, batch=img_tensor, proto_pool=proto_pool
             )
             current_idx += img_tensor.shape[0]
 

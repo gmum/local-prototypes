@@ -138,7 +138,7 @@ class PrototypeChooser(nn.Module):
         x = self.add_on_layers(x)
         return x
 
-    def forward(self, x: torch.Tensor, gumbel_scale: int = 0) -> Tuple:
+    def forward(self, x: torch.Tensor, gumbel_scale: int = 10e3) -> Tuple:
         if gumbel_scale == 0:
             proto_presence = torch.softmax(self.proto_presence, dim=1)
         else:
@@ -171,6 +171,11 @@ class PrototypeChooser(nn.Module):
         else:
             x = x.sum(dim=-1)
         return x, min_distances, proto_presence, all_similarities  # [b,c,n] [b, p] [c, p, n], [b, p, w, h]
+
+    def push_forward(self, x: torch.Tensor) -> Tuple:
+        conv_features = self.conv_features(x)
+        distances = self._l2_convolution(conv_features)  # [b, p, h, w]
+        return conv_features, distances
 
     def _l2_convolution(self, x):
         '''

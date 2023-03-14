@@ -25,6 +25,7 @@ from tqdm import tqdm
 
 from adversarial_attacks.adversarial_attack import attack_images_target_class_prototypes
 from adversarial_attacks.run_on_dataset import run_model_on_dataset, run_model_on_batch, normalize
+from protopool.model import PrototypeChooser
 from settings import results_dir, test_dir, img_size
 
 
@@ -120,16 +121,38 @@ def run_adversarial_attack_on_prototypes(args):
         test_dataset = subset_test_dataset
 
     metrics_mean, metrics_all = {}, {}
-    for ch_path, model_key in zip(args.model_checkpoints, args.model_keys):
+    for ch_path, model_key, is_proto_pool in zip(args.model_checkpoints, args.model_keys, args.proto_pool):
+        is_proto_pool = is_proto_pool == '1'
         print(f'Loading model {model_key} from {ch_path}...')
-        if torch.cuda.is_available():
-            model = torch.load(ch_path).cuda()
+        if is_proto_pool:
+            # TODO use model config instead of hard-coding
+            model = PrototypeChooser(
+                num_prototypes=202,
+                num_descriptive=10,
+                num_classes=200,
+                use_thresh=True,
+                arch='resnet34',
+                pretrained=True,
+                add_on_layers_type='log',
+                prototype_activation_function='log',
+                proto_depth=256,
+                use_last_layer=True,
+                inat=False,
+            )
+            if torch.cuda.is_available():
+                model.load_state_dict(torch.load(ch_path)['model_state_dict'])
+                model = model.cuda()
+            else:
+                model.load_state_dict(torch.load(ch_path, map_location=torch.device('cpu'))['model_state_dict'])
         else:
-            model = torch.load(ch_path, map_location=torch.device('cpu'))
+            if torch.cuda.is_available():
+                model = torch.load(ch_path).cuda()
+            else:
+                model = torch.load(ch_path, map_location=torch.device('cpu'))
 
         model_output_dir = os.path.join(experiment_output_dir, model_key)
-        output_adv_img_dir_summaries = os.path.join(model_output_dir, 'adversarial_images_summaries')
-        os.makedirs(output_adv_img_dir_summaries, exist_ok=True)
+        # output_adv_img_dir_summaries = os.path.join(model_output_dir, 'adversarial_images_summaries')
+        # os.makedirs(output_adv_img_dir_summaries, exist_ok=True)
 
         output_top_k_dir = os.path.join(model_output_dir, 'adversarial_images_summaries_cherrypicked')
         os.makedirs(output_top_k_dir, exist_ok=True)
@@ -139,14 +162,14 @@ def run_adversarial_attack_on_prototypes(args):
         n_samples, n_correct_before, n_correct_after = 0, 0, 0
         metrics = defaultdict(list)
 
-        top_k_save = 20
         top_k_examples, top_k_examples_diffs = [], []
 
         for batch_result in run_model_on_dataset(
                 model=model,
                 dataset=test_dataset,
                 num_workers=args.n_jobs,
-                batch_size=args.batch_size
+                batch_size=args.batch_size,
+                proto_pool=is_proto_pool,
         ):
             adversarial_result = attack_images_target_class_prototypes(
                 model=model,
@@ -164,7 +187,7 @@ def run_adversarial_attack_on_prototypes(args):
 
             with torch.no_grad():
                 predicted_cls_adv, patch_activations_adv = run_model_on_batch(
-                    model=model, batch=adversarial_result['img_modified_tensor']
+                    model=model, batch=adversarial_result['img_modified_tensor'], proto_pool=is_proto_pool
                 )
 
             n_correct_after += np.sum(predicted_cls_adv == batch_result['target'])
@@ -220,21 +243,21 @@ def run_adversarial_attack_on_prototypes(args):
                                 # bbox_inches='tight', pad_inches=0)
                     # plt.close()
 
-                plt.figure(figsize=(25, 5))
-                for img_i, (im, desc) in enumerate(zip(all_img, all_img_desc)):
-                    plt.subplot(1, len(all_img), img_i + 1)
-                    plt.imshow(im, vmin=0, vmax=1)
-                    plt.title(desc)
-                    plt.axis('off')
-                plt.tight_layout()
-                plt.savefig(os.path.join(output_adv_img_dir_summaries, filename),
-                            bbox_inches='tight', pad_inches=0.2)
-                plt.close()
+                # plt.figure(figsize=(25, 5))
+                # for img_i, (im, desc) in enumerate(zip(all_img, all_img_desc)):
+                    # plt.subplot(1, len(all_img), img_i + 1)
+                    # plt.imshow(im, vmin=0, vmax=1)
+                    # plt.title(desc)
+                    # plt.axis('off')
+                # plt.tight_layout()
+                # plt.savefig(os.path.join(output_adv_img_dir_summaries, filename),
+                            # bbox_inches='tight', pad_inches=0.2)
+                # plt.close()
 
                 # save some cherry-picked samples where activation change is the biggest
                 top_proto_act_diff = metrics['top_proto_act_diff'][-1]
-                if len(top_k_examples) < top_k_save or any(k > top_proto_act_diff for k in top_k_examples_diffs):
-                    if len(top_k_examples) >= top_k_save:
+                if len(top_k_examples) < args.top_k_save or any(k > top_proto_act_diff for k in top_k_examples_diffs):
+                    if len(top_k_examples) >= args.top_k_save:
                         argmax = np.argmax(top_k_examples_diffs)
                         os.remove(os.path.join(output_top_k_dir, top_k_examples[argmax]))
                         top_k_examples.pop(argmax)
@@ -242,8 +265,18 @@ def run_adversarial_attack_on_prototypes(args):
 
                     top_k_examples.append(filename)
                     top_k_examples_diffs.append(top_proto_act_diff)
-                    shutil.copy(os.path.join(output_adv_img_dir_summaries, filename),
-                                os.path.join(output_top_k_dir, filename))
+
+                    plt.figure(figsize=(25, 5))
+                    for img_i, (im, desc) in enumerate(zip(all_img, all_img_desc)):
+                        plt.subplot(1, len(all_img), img_i + 1)
+                        plt.imshow(im, vmin=0, vmax=1)
+                        plt.title(desc)
+                        plt.axis('off')
+                    plt.tight_layout()
+                    plt.savefig(os.path.join(output_top_k_dir, filename),
+                                bbox_inches='tight', pad_inches=0.2)
+
+                plt.close()
                 pbar.update()
 
             acc1 = n_correct_before / n_samples * 100
@@ -293,12 +326,15 @@ if __name__ == '__main__':
     parser.add_argument('model_checkpoints', nargs='+', type=str,
                         help='Paths to the checkpoints (.pth files) of the evaluated models')
     parser.add_argument('--model_keys', nargs='+', type=str, help='Names for the models to display in plot titles')
+    parser.add_argument('--proto_pool', nargs='+', type=str, help='Whether the models are ProtoPool. '
+                                                                  '"1" for ProtoPool, otherwise ProtoPNet')
 
     parser.add_argument('--output_dir', type=str, help='Name of the output directory in RESULTS_PATH')
 
     parser.add_argument('--n_samples', type=int, default=500, help='Number of samples (-1 == all test set)')
     parser.add_argument('--n_jobs', type=int, default=8, help='Number of parallel jobs (for DataLoader)')
     parser.add_argument('--batch_size', type=int, default=8, help='Batch size for using the model')
+    parser.add_argument('--top_k_save', type=int, default=50, help='Number of Top K most changed images to save')
 
     parser.add_argument('--attack_type', type=str, default='top_proto',
                         help='Attack type: '
