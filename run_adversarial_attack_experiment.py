@@ -343,11 +343,11 @@ if __name__ == '__main__':
                         )
 
     # parameters for the adversarial attack
-    parser.add_argument('--epsilon', type=float, default=0.2,
+    parser.add_argument('--epsilon', type=float, default=0.4,
                         help='Maximum perturbation of the adversarial attack')
-    parser.add_argument('--epsilon_iter', type=float, default=0.02,
+    parser.add_argument('--epsilon_iter', type=float, default=0.01,
                         help='Maximum perturbation of the adversarial attack within one iteration')
-    parser.add_argument('--nb_iter', type=iter, default=10,
+    parser.add_argument('--nb_iter', type=iter, default=40,
                         help='Number of iterations of the adversarial attack')
 
     run_adversarial_attack_on_prototypes(parser.parse_args())
