@@ -51,7 +51,7 @@ def _train_or_test(model, dataloader, optimizer=None, class_specific=True, use_l
                         possible_modifications = [
                             torch.zeros_like(input[sample_i]),
                             torch.rand(input.shape[1:]),
-                            input[sample_i] + torch.rand(input[sample_i].shape)
+                            input[sample_i] + torch.rand(input[sample_i].shape, device=input.device)
                         ]
 
                         num_boxes = np.random.randint(1, max_num_boxes + 1)
@@ -63,7 +63,7 @@ def _train_or_test(model, dataloader, optimizer=None, class_specific=True, use_l
                             top = np.random.randint(0, img_size - height)
 
                             input[sample_i, top:top + height, left:left + width] = \
-                                possible_modifications[np.random.randint(3)][:, top:top + height, left:left + width]
+                                possible_modifications[np.random.randint(3)][top:top + height, left:left + width]
 
             output, min_distances, all_similarities = model(input, return_all_similarities=True)
 
