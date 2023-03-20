@@ -52,7 +52,7 @@ def get_heatmaps_with_same_normalization(*patch_activations) -> List[np.ndarray]
     return heatmaps
 
 
-def get_activation_change_metrics(act_before, act_after, proto_nums):
+def get_activation_change_metrics(act_before, act_after, proto_nums, cls_proto_nums):
     metrics = {}
 
     protos_act_before = act_before[proto_nums]
@@ -70,6 +70,7 @@ def get_activation_change_metrics(act_before, act_after, proto_nums):
     metrics['top_proto_act_before'] = top_proto_act_before
     metrics['top_proto_act_after'] = top_proto_act_after
     metrics['top_proto_act_diff'] = top_proto_act_after - top_proto_act_before
+    metrics['top_proto_act_diff_percent'] = top_proto_act_after/top_proto_act_before * 100
 
     # as a metric, calculate relative change of "place" in argsort over all prototypes, of the top activated prototype
     max_activations_before = np.max(act_before.reshape(act_before.shape[0], -1), axis=-1)
@@ -81,6 +82,16 @@ def get_activation_change_metrics(act_before, act_after, proto_nums):
     metrics['top_proto_place_before'] = argmax_place_before
     metrics['top_proto_place_after'] = argmax_place_after
     metrics['top_proto_place_diff'] = argmax_place_after - argmax_place_before
+
+    cls_proto_nums = set(cls_proto_nums)
+    non_cls_proto_nums = np.asarray([i for i in range(act_before.shape[0]) if i not in cls_proto_nums])
+    argmax_place_before = float(np.sum(max_activations_before[non_cls_proto_nums] >
+                                       max_activations_before[proto_nums[argmax_act]]))
+    argmax_place_after = float(np.sum(max_activations_after[non_cls_proto_nums] >
+                                      max_activations_after[proto_nums[argmax_act]]))
+    metrics['non_cls_protos_higher_than_top_proto_before'] = argmax_place_before
+    metrics['non_cls_protos_higher_than_top_proto_after'] = argmax_place_after
+    metrics['non_cls_protos_higher_than_top_proto_diff'] = argmax_place_after - argmax_place_before
 
     if len(proto_nums) > 1:
         # same metric as above but for all the prototypes of the target class
@@ -198,6 +209,7 @@ def run_adversarial_attack_on_prototypes(args):
                 img_modified = adversarial_result['img_modified_numpy'][sample_i]
                 sample_mask = adversarial_result['mask'][sample_i]
                 proto_nums = adversarial_result['proto_nums'][sample_i]
+                cls_proto_nums = adversarial_result['cls_proto_nums'][sample_i]
 
                 img_original = img_original.transpose(1, 2, 0)
                 img_modified = img_modified.transpose(1, 2, 0)
@@ -218,7 +230,7 @@ def run_adversarial_attack_on_prototypes(args):
 
                 for metric_key, val in get_activation_change_metrics(batch_result['patch_activations'][sample_i],
                                                                      patch_activations_adv[sample_i],
-                                                                     proto_nums).items():
+                                                                     proto_nums, cls_proto_nums).items():
                     if isinstance(val, list):
                         metrics[metric_key].extend(val)
                     else:

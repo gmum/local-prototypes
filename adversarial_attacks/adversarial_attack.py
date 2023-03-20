@@ -66,9 +66,10 @@ def attack_images_target_class_prototypes(
     :param nb_iter: number of iterations of the adversarial attack
     :return: a dictionary contained the modified images and the mask of the region of the attack
     """
+    proto_cls_identity = model.prototype_class_identity.cpu().detach().numpy()
+    cls_proto_nums = [np.argwhere(proto_cls_identity[:, c] == 1).flatten() for c in cls]
     if attack_type == 'gt_protos':
-        proto_nums = [np.argwhere(model.prototype_class_identity.cpu().detach().numpy()[:, c] == 1).flatten()
-                      for c in cls]
+        proto_nums = cls_proto_nums
     elif attack_type == 'top_proto':
         proto_nums = []
         for sample_act in activations:
@@ -121,5 +122,6 @@ def attack_images_target_class_prototypes(
         'mask': mask.cpu().detach().numpy(),
         'proto_nums': proto_nums,
         'activations_before': activations_before,
-        'activations_after': activations_after
+        'activations_after': activations_after,
+        'cls_proto_nums': cls_proto_nums,
     }
