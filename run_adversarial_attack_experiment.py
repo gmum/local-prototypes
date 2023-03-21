@@ -133,7 +133,9 @@ def run_adversarial_attack_on_prototypes(args):
 
     metrics_mean, metrics_all = {}, {}
     for ch_path, model_key, is_proto_pool in zip(args.model_checkpoints, args.model_keys, args.proto_pool):
-        is_proto_pool = is_proto_pool == '1'
+        proto_pool_arch = 'resnet50' if is_proto_pool == '2' else 'resnet34'
+        is_proto_pool = is_proto_pool == '1' or is_proto_pool == '2'
+
         print(f'Loading model {model_key} from {ch_path}...')
         if is_proto_pool:
             # TODO use model config instead of hard-coding
@@ -142,7 +144,8 @@ def run_adversarial_attack_on_prototypes(args):
                 num_descriptive=10,
                 num_classes=200,
                 use_thresh=True,
-                arch='resnet34',
+                arch=proto_pool_arch,
+                inat=proto_pool_arch=='resnet50',
                 pretrained=True,
                 add_on_layers_type='log',
                 prototype_activation_function='log',
@@ -338,8 +341,10 @@ if __name__ == '__main__':
     parser.add_argument('model_checkpoints', nargs='+', type=str,
                         help='Paths to the checkpoints (.pth files) of the evaluated models')
     parser.add_argument('--model_keys', nargs='+', type=str, help='Names for the models to display in plot titles')
-    parser.add_argument('--proto_pool', nargs='+', type=str, help='Whether the models are ProtoPool. '
-                                                                  '"1" for ProtoPool, otherwise ProtoPNet')
+    parser.add_argument('--proto_pool', nargs='+', type=str,
+                        help='Whether the models are ProtoPool. '
+                             '"1" for ProtoPool with resnet 34, "2" for ProtoPool '
+                             'with resnet50 and iNaturalist pretraining, otherwise ProtoPNet')
 
     parser.add_argument('--output_dir', type=str, help='Name of the output directory in RESULTS_PATH')
 
