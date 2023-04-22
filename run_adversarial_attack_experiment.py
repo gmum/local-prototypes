@@ -10,7 +10,6 @@ python run_adversarial_attack_experiment.py results/2023_01_23_resnet_34_mask_hi
 import json
 import argparse
 import os
-import shutil
 from collections import defaultdict
 from typing import List
 import pandas as pd
@@ -151,7 +150,6 @@ def run_adversarial_attack_on_prototypes(args):
                 prototype_activation_function='log',
                 proto_depth=256,
                 use_last_layer=True,
-                inat=False,
             )
             if torch.cuda.is_available():
                 model.load_state_dict(torch.load(ch_path)['model_state_dict'])
@@ -348,7 +346,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--output_dir', type=str, help='Name of the output directory in RESULTS_PATH')
 
-    parser.add_argument('--n_samples', type=int, default=500, help='Number of samples (-1 == all test set)')
+    parser.add_argument('--n_samples', type=int, default=-1, help='Number of samples (-1 == all test set)')
     parser.add_argument('--n_jobs', type=int, default=8, help='Number of parallel jobs (for DataLoader)')
     parser.add_argument('--batch_size', type=int, default=8, help='Batch size for using the model')
     parser.add_argument('--top_k_save', type=int, default=50, help='Number of Top K most changed images to save')

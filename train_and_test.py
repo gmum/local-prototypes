@@ -36,7 +36,7 @@ def _train_or_test(model, dataloader, optimizer=None, class_specific=True, use_l
         with grad_req:
             # nn.Module has implemented __call__() function
             # so no need to call .forward
-            if masking_type == 'random_no_loss' and is_train:
+            if masking_type == 'random_no_loss' or masking_type == 'high_act_aug' and is_train:
                 min_box_size = img_size // 8
                 max_box_size = img_size // 2
                 masking_prob = 0.5
@@ -91,7 +91,7 @@ def _train_or_test(model, dataloader, optimizer=None, class_specific=True, use_l
                     sim_diff = (all_similarities - all_similarities2) ** 2
                     sim_diff_loss = torch.sum(sim_diff * random_mask) / torch.sum(random_mask)
 
-                elif masking_type == 'high_act':
+                elif masking_type == 'high_act' or masking_type == 'high_act_aug':
                     with torch.no_grad():
                         proto_sim = []
                         proto_nums = []
