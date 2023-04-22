@@ -98,6 +98,7 @@ def learn_model(opt: Optional[List[str]]) -> None:
     parser.add_argument('--quantized_mask', action='store_true')
     parser.add_argument('--sim_diff_weight', default=1.0, type=float)
     parser.add_argument('--sim_diff_function', default='l2', type=str)
+    parser.add_argument('--augmentations', action='store_true')
 
     if opt is None:
         args, unknown = parser.parse_known_args()
@@ -315,6 +316,37 @@ def learn_model(opt: Optional[List[str]]) -> None:
                     if args.mixup_data:
                         data, targets_a, targets_b, lam = mixup_data(
                             data, label, 0.5)
+
+                    if args.augmentations:
+                        img_size = 224
+                        min_box_size = img_size // 8
+                        max_box_size = img_size // 2
+                        masking_prob = 0.5
+                        max_num_boxes = 5
+
+                        with torch.no_grad():
+                            # TODO move this to the Dataset
+                            for sample_i in range(data.shape[0]):
+                                if np.random.random() < masking_prob:
+                                    continue
+
+                                possible_modifications = [
+                                    torch.zeros_like(data[sample_i]),
+                                    torch.rand(data.shape[1:]),
+                                    data[sample_i] + torch.rand(data[sample_i].shape, device=data.device)
+                                ]
+
+                                num_boxes = np.random.randint(1, max_num_boxes + 1)
+
+                                for _ in range(num_boxes):
+                                    width = np.random.randint(min_box_size, max_box_size)
+                                    height = np.random.randint(min_box_size, max_box_size)
+                                    left = np.random.randint(0, img_size - width)
+                                    top = np.random.randint(0, img_size - height)
+
+                                    data[sample_i, top:top + height, left:left + width] = \
+                                        possible_modifications[np.random.randint(3)][top:top + height,
+                                        left:left + width]
 
                     # ===================forward=====================
                     prob, min_distances, proto_presence, all_similarities = model_multi(
