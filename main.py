@@ -196,7 +196,7 @@ min_num_epochs = 20
 
 if args.masking_type == 'random':
     max_sim_diff_weight = coefs['sim_diff_random']
-elif args.masking_type == 'high_act':
+elif args.masking_type == 'high_act' or args.masking_type == 'high_act_aug':
     max_sim_diff_weight = coefs['sim_diff_high_act']
 else:
     max_sim_diff_weight = 0.0

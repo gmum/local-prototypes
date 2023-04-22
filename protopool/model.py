@@ -6,9 +6,9 @@ from torch.nn.parameter import Parameter
 import torch.nn.functional as F
 from torch.nn.functional import gumbel_softmax
 
+from protopool.resnet_features import resnet18_features, resnet34_features, resnet50_features, resnet101_features, resnet152_features
+from protopool.densenet_features import densenet121_features, densenet161_features, densenet169_features, densenet201_features
 
-from resnet_features import resnet18_features, resnet34_features, resnet50_features, resnet101_features, resnet152_features
-from densenet_features import densenet121_features, densenet161_features, densenet169_features, densenet201_features
 from vgg_features import vgg11_features, vgg11_bn_features, vgg13_features, vgg13_bn_features, vgg16_features, vgg16_bn_features,\
                          vgg19_features, vgg19_bn_features
 import numpy as np

@@ -128,7 +128,7 @@ save.save_model_w_condition(model=ppnet, model_dir=model_dir,
 
 if args.masking_type == 'random':
     sim_diff_weight = coefs['sim_diff_random']
-elif args.masking_type == 'high_act':
+elif args.masking_type == 'high_act' or  args.masking_type == 'high_act_aug':
     sim_diff_weight = coefs['sim_diff_high_act']
 else:
     sim_diff_weight = 0.0
