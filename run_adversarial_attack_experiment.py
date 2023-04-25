@@ -69,7 +69,7 @@ def get_activation_change_metrics(act_before, act_after, proto_nums, cls_proto_n
     metrics['top_proto_act_before'] = top_proto_act_before
     metrics['top_proto_act_after'] = top_proto_act_after
     metrics['top_proto_act_diff'] = top_proto_act_after - top_proto_act_before
-    metrics['top_proto_act_diff_percent'] = top_proto_act_after/top_proto_act_before * 100
+    metrics['top_proto_act_diff_percent'] = top_proto_act_after / top_proto_act_before * 100
 
     # as a metric, calculate relative change of "place" in argsort over all prototypes, of the top activated prototype
     max_activations_before = np.max(act_before.reshape(act_before.shape[0], -1), axis=-1)
@@ -91,6 +91,27 @@ def get_activation_change_metrics(act_before, act_after, proto_nums, cls_proto_n
     metrics['non_cls_protos_higher_than_top_proto_before'] = argmax_place_before
     metrics['non_cls_protos_higher_than_top_proto_after'] = argmax_place_after
     metrics['non_cls_protos_higher_than_top_proto_diff'] = argmax_place_after - argmax_place_before
+
+    # get mIOU of high activated region before anda after the modification
+    protos_act_before = act_before[proto_nums[argmax_act]]
+    protos_act_after = act_after[proto_nums[argmax_act]]
+
+    proto_act_before = torch.nn.functional.interpolate(torch.tensor(protos_act_before).unsqueeze(0).unsqueeze(0),
+                                                       size=(img_size, img_size),
+                                                       mode='bilinear')
+    proto_act_before = proto_act_before.squeeze(0).squeeze(0)
+    proto_act_after = torch.nn.functional.interpolate(torch.tensor(protos_act_after).unsqueeze(0).unsqueeze(0),
+                                                      size=(img_size, img_size),
+                                                      mode='bilinear')
+    proto_act_after = proto_act_after.squeeze(0).squeeze(0)
+
+    quantile_before = torch.quantile(proto_act_before.flatten(), q=0.9, dim=-1)
+    high_act_before = proto_act_before > quantile_before
+    quantile_after = torch.quantile(proto_act_after.flatten(), q=0.9, dim=-1)
+    high_act_after = proto_act_after > quantile_after
+
+    iou = torch.sum(high_act_after & high_act_before) / torch.sum(high_act_after | high_act_before)
+    metrics['iou'] = iou
 
     if len(proto_nums) > 1:
         # same metric as above but for all the prototypes of the target class
@@ -144,7 +165,7 @@ def run_adversarial_attack_on_prototypes(args):
                 num_classes=200,
                 use_thresh=True,
                 arch=proto_pool_arch,
-                inat=proto_pool_arch=='resnet50',
+                inat=proto_pool_arch == 'resnet50',
                 pretrained=True,
                 add_on_layers_type='log',
                 prototype_activation_function='log',
@@ -248,23 +269,23 @@ def run_adversarial_attack_on_prototypes(args):
                 # os.makedirs(output_adv_img_dir_all, exist_ok=True)
                 # extension = 'jpg'
                 # for im, desc in zip(all_img, all_img_desc):
-                    # plt.figure(figsize=(5, 5))
-                    # plt.imshow(im, vmin=0, vmax=1)
-                    # plt.axis('off')
-                    # plt.savefig(os.path.join(output_adv_img_dir_all,
-                                             # filename.replace(f'.{extension}', f'_{desc}.{extension}')),
-                                # bbox_inches='tight', pad_inches=0)
-                    # plt.close()
+                # plt.figure(figsize=(5, 5))
+                # plt.imshow(im, vmin=0, vmax=1)
+                # plt.axis('off')
+                # plt.savefig(os.path.join(output_adv_img_dir_all,
+                # filename.replace(f'.{extension}', f'_{desc}.{extension}')),
+                # bbox_inches='tight', pad_inches=0)
+                # plt.close()
 
                 # plt.figure(figsize=(25, 5))
                 # for img_i, (im, desc) in enumerate(zip(all_img, all_img_desc)):
-                    # plt.subplot(1, len(all_img), img_i + 1)
-                    # plt.imshow(im, vmin=0, vmax=1)
-                    # plt.title(desc)
-                    # plt.axis('off')
+                # plt.subplot(1, len(all_img), img_i + 1)
+                # plt.imshow(im, vmin=0, vmax=1)
+                # plt.title(desc)
+                # plt.axis('off')
                 # plt.tight_layout()
                 # plt.savefig(os.path.join(output_adv_img_dir_summaries, filename),
-                            # bbox_inches='tight', pad_inches=0.2)
+                # bbox_inches='tight', pad_inches=0.2)
                 # plt.close()
 
                 # save some cherry-picked samples where activation change is the biggest
