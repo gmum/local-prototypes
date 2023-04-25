@@ -111,6 +111,7 @@ def get_activation_change_metrics(act_before, act_after, proto_nums, cls_proto_n
     high_act_after = proto_act_after > quantile_after
 
     iou = torch.sum(high_act_after & high_act_before) / torch.sum(high_act_after | high_act_before)
+    iou = float(iou.item())
     metrics['iou'] = iou
 
     if len(proto_nums) > 1:
