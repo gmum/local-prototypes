@@ -42,14 +42,20 @@ def run_model_on_batch(
             prototype_activations = x.flatten(start_dim=1)
         else:
             raise NotImplementedError('Not implemented for proto_pool')
+
+        sim = model.distance_2_similarity(distances)  # [b, p]
+        avg_sim = model.distance_2_similarity(avg_dist)  # [b, p]
+
+        patch_activations = sim - avg_sim.unsqueeze(-1).unsqueeze(-1)
+        patch_activations = patch_activations.cpu().detach().numpy()
     else:
         min_distances = -nn.functional.max_pool2d(-distances,
                                                   kernel_size=(distances.size()[2],
                                                                distances.size()[3]))
         min_distances = min_distances.view(-1, model.num_prototypes)
         prototype_activations = model.distance_2_similarity(min_distances)
+        patch_activations = model.distance_2_similarity(distances).cpu().detach().numpy()
 
-    patch_activations = model.distance_2_similarity(distances).cpu().detach().numpy()
     predicted_cls = torch.argmax(model.last_layer(prototype_activations), dim=-1)
 
     return predicted_cls.cpu().detach().numpy(), patch_activations
