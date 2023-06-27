@@ -23,13 +23,9 @@ parser.add_argument('--masking_type', type=str, default='none')
 parser.add_argument('--quantized_mask', type=bool, default=False)
 parser.add_argument('--sim_diff_function', type=str, default='l1')
 parser.add_argument("--mixup", type=bool, action=argparse.BooleanOptionalAction)
-parser.add_argument(
-    "--mixup", type=bool, action=argparse.BooleanOptionalAction
-)
+parser.set_defaults(mixup=False)
 parser.add_argument("--focal_sim", type=bool, action=argparse.BooleanOptionalAction)
-parser.add_argument(
-    "--focal_sim", type=bool, action=argparse.BooleanOptionalAction
-)
+parser.set_defaults(focal_sim=False)
 
 args = parser.parse_args()
 os.environ['CUDA_VISIBLE_DEVICES'] = args.gpuid[0]

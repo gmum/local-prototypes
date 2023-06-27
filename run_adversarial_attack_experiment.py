@@ -193,6 +193,8 @@ def run_adversarial_attack_on_prototypes(args):
                 model = torch.load(ch_path).cuda()
             else:
                 model = torch.load(ch_path, map_location=torch.device('cpu'))
+            if args.focal_sim:
+                setattr(model, 'focal_loss', True)
 
         model_output_dir = os.path.join(experiment_output_dir, model_key)
         # output_adv_img_dir_summaries = os.path.join(model_output_dir, 'adversarial_images_summaries')
@@ -397,5 +399,8 @@ if __name__ == '__main__':
                         help='Maximum perturbation of the adversarial attack within one iteration')
     parser.add_argument('--nb_iter', type=iter, default=40,
                         help='Number of iterations of the adversarial attack')
+
+    parser.add_argument("--focal_sim", type=bool, action=argparse.BooleanOptionalAction)
+    parser.set_defaults(focal_sim=False)
 
     run_adversarial_attack_on_prototypes(parser.parse_args())
