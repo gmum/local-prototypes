@@ -196,11 +196,11 @@ def _train_or_test(model, dataloader, optimizer=None, class_specific=True, use_l
 
             # compute loss
             if mixup:
-                cross_entropy = torch.nn.functional.cross_entropy(output, target)
-            else:
                 cross_entropy = lam * \
                                 torch.nn.functional.cross_entropy(output, targets_a) + (1 - lam) * \
                                 torch.nn.functional.cross_entropy(output, targets_b)
+            else:
+                cross_entropy = torch.nn.functional.cross_entropy(output, target)
 
             # evaluation statistics
             _, predicted = torch.max(output.data, 1)
