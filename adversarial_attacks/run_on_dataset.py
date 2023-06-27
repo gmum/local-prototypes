@@ -54,7 +54,19 @@ def run_model_on_batch(
                                                                distances.size()[3]))
         min_distances = min_distances.view(-1, model.num_prototypes)
         prototype_activations = model.distance_2_similarity(min_distances)
-        patch_activations = model.distance_2_similarity(distances).cpu().detach().numpy()
+        if hasattr(model, 'focal_sim') and model.focal_sim:
+            avg_dist = F.avg_pool2d(distances, kernel_size=(distances.size()[2],
+                                                            distances.size()[3])).squeeze()  # [b, p]
+            if avg_dist.ndim == 1:
+                avg_dist = avg_dist.unsqueeze(0)
+            avg_dist = avg_dist.unsqueeze(-1).unsqueeze(-1)
+            avg_sim = model.distance_2_similarity(avg_dist)
+
+            prototype_activations = prototype_activations - avg_sim
+            patch_activations = model.distance_2_similarity(distances) - avg_sim
+            patch_activations = patch_activations.cpu().detach().numpy()
+        else:
+            patch_activations = model.distance_2_similarity(distances).cpu().detach().numpy()
 
     predicted_cls = torch.argmax(model.last_layer(prototype_activations), dim=-1)
 

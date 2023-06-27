@@ -180,14 +180,6 @@ class PPNet(nn.Module):
         # x2_patch_sum and intermediate_result are of the same shape
         distances = F.relu(x2_patch_sum + intermediate_result)
 
-        if hasattr(self, 'focal_sim') and self.focal_sim:
-            avg_dist = F.avg_pool2d(distances, kernel_size=(distances.size()[2],
-                                                            distances.size()[3])).squeeze()  # [b, p]
-            if avg_dist.ndim == 1:
-                avg_dist = avg_dist.unsqueeze(0)
-            avg_dist = avg_dist.unsqueeze(-1).unsqueeze(-1)
-            return distances - avg_dist
-
         return distances
 
     def prototype_distances(self, x):
@@ -229,6 +221,15 @@ class PPNet(nn.Module):
                                                    distances.size()[3]))
         min_distances = min_distances.view(-1, self.num_prototypes)
         prototype_activations = self.distance_2_similarity(min_distances)
+
+        if hasattr(self, 'focal_sim') and self.focal_sim:
+            avg_dist = F.avg_pool2d(distances, kernel_size=(distances.size()[2],
+                                                            distances.size()[3])).squeeze()  # [b, p]
+            if avg_dist.ndim == 1:
+                avg_dist = avg_dist.unsqueeze(0)
+
+            prototype_activations = prototype_activations - self.distance_2_similarity(avg_dist)
+
         logits = self.last_layer(prototype_activations)
 
         if return_all_similarities:

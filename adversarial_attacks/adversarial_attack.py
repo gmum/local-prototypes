@@ -101,8 +101,8 @@ def attack_images_target_class_prototypes(
             norm=np.inf,
         )
         img_modified.append(sample_modified)
-        activations_before.append(wrapper.initial_activation)
-        activations_after.append(wrapper.final_activation)
+        activations_before.append(np.clip(wrapper.initial_activation, a_min=0.0, a_max=None))
+        activations_after.append(np.clip(wrapper.final_activation, a_min=0.0, a_max=None))
 
     img_modified = torch.cat(img_modified, dim=0)
     img_modified = img_modified * mask + img * (1 - mask)
