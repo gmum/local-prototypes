@@ -226,6 +226,7 @@ def run_adversarial_attack_on_prototypes(args):
                 epsilon=args.epsilon,
                 epsilon_iter=args.epsilon_iter,
                 nb_iter=args.nb_iter,
+                focal_sim=args.focal_sim or is_proto_pool
             )
 
             n_samples += len(batch_result['filenames'])

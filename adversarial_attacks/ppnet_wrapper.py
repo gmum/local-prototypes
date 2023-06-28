@@ -9,13 +9,15 @@ class PPNetAdversarialWrapper(nn.Module):
     over a selected image, and with a selected mask.
     The attack aims to minimize the activation of the selected prototypes, while modifying only the masked pixels.
     """
+
     def __init__(
             self,
             model: nn.Module,
             img: torch.Tensor,
             proto_nums: np.ndarray,
             mask: torch.Tensor,
-            ):
+            focal_sim: bool = False
+    ):
         """
         :param model: PPNet model
         :param img: an image to attack
@@ -26,6 +28,7 @@ class PPNetAdversarialWrapper(nn.Module):
         self.model = model
         self.proto_nums = proto_nums
         self.mask = mask
+        self.focal_sim = focal_sim
 
         # ensure that we do not propagate gradients through the image and the mask
         self.img = img.clone()
@@ -43,9 +46,14 @@ class PPNetAdversarialWrapper(nn.Module):
         conv_output, distances = self.model.push_forward(x2)
         distances = distances[:, self.proto_nums]
         activations = self.model.distance_2_similarity(distances).flatten(start_dim=2)
-        activations, _ = torch.max(activations, dim=-1)
+        max_activations, _ = torch.max(activations, dim=-1)
         if self.initial_activation is None:
-            self.initial_activation = activations[0].clone().cpu().detach().numpy()
-        self.final_activation = activations[0].clone().cpu().detach().numpy()
-        activations = torch.mean(activations).unsqueeze(0).unsqueeze(0)
-        return activations
+            self.initial_activation = max_activations[0].clone().cpu().detach().numpy()
+        self.final_activation = max_activations[0].clone().cpu().detach().numpy()
+
+        if self.focal_sim:
+            mean_activations = torch.mean(activations, dim=-1).unsqueeze(-1)
+            act_diff = max_activations - mean_activations
+            return torch.mean(act_diff).unsqueeze(0).unsqueeze(0)
+        else:
+            return torch.mean(max_activations).unsqueeze(0).unsqueeze(0)
