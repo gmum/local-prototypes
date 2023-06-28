@@ -1,6 +1,7 @@
 import os
 
 import torch
+import numpy as np
 from torch import nn
 from torch.nn.functional import gumbel_softmax
 import torch.nn.functional as F
@@ -70,7 +71,7 @@ def run_model_on_batch(
 
     predicted_cls = torch.argmax(model.last_layer(prototype_activations), dim=-1)
 
-    return predicted_cls.cpu().detach().numpy(), patch_activations
+    return predicted_cls.cpu().detach().numpy(), np.clip(patch_activations, a_min=0, a_max=None)
 
 
 def run_model_on_dataset(

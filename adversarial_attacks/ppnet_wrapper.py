@@ -48,17 +48,17 @@ class PPNetAdversarialWrapper(nn.Module):
 
         activations = self.model.distance_2_similarity(distances).flatten(start_dim=2)
         max_activations, _ = torch.max(activations, dim=-1)
+        self.final_activation = max_activations[0].clone().cpu().detach().numpy()
+        if self.initial_activation is None:
+            self.initial_activation = max_activations[0].clone().cpu().detach().numpy()
 
         if self.focal_sim:
             distances = distances.flatten(start_dim=2)
             mean_dist = torch.mean(distances, dim=-1).unsqueeze(-1)
             min_dist, _ = torch.min(distances, dim=-1)
-            self.final_activation = max_activations[0].clone().cpu().detach().numpy()
 
             sim_diff = self.model.distance_2_similarity(min_dist) - self.model.distance_2_similarity(mean_dist)
             return torch.mean(sim_diff).unsqueeze(0).unsqueeze(0)
         else:
-            if self.initial_activation is None:
-                self.initial_activation = max_activations[0].clone().cpu().detach().numpy()
             self.final_activation = max_activations[0].clone().cpu().detach().numpy()
             return torch.mean(max_activations).unsqueeze(0).unsqueeze(0)
