@@ -52,8 +52,8 @@ shutil.copy(src=os.path.join(os.getcwd(), __file__), dst=model_dir)
 log, logclose = create_logger(log_filename=os.path.join(model_dir, 'prune.log'))
 
 ppnet = torch.load(os.path.join(original_model_dir, original_model_name))
-if args.focal_loss:
-    setattr(ppnet, 'focal_loss', True)
+if args.focal_sim:
+    setattr(ppnet, 'focal_sim', True)
 ppnet = ppnet.cuda()
 ppnet_multi = torch.nn.DataParallel(ppnet)
 class_specific = True

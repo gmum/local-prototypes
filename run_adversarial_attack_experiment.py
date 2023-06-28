@@ -194,7 +194,7 @@ def run_adversarial_attack_on_prototypes(args):
             else:
                 model = torch.load(ch_path, map_location=torch.device('cpu'))
             if args.focal_sim:
-                setattr(model, 'focal_loss', True)
+                setattr(model, 'focal_sim', True)
 
         model_output_dir = os.path.join(experiment_output_dir, model_key)
         # output_adv_img_dir_summaries = os.path.join(model_output_dir, 'adversarial_images_summaries')
