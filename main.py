@@ -31,6 +31,8 @@ parser.add_argument("--mixup", type=bool, action=argparse.BooleanOptionalAction)
 parser.set_defaults(mixup=False)
 parser.add_argument("--focal_sim", type=bool, action=argparse.BooleanOptionalAction)
 parser.set_defaults(focal_sim=False)
+parser.add_argument("--adversarial_training", type=bool, action=argparse.BooleanOptionalAction)
+parser.set_defaults(adversarial_training=False)
 
 args = parser.parse_args()
 os.environ['CUDA_VISIBLE_DEVICES'] = args.gpuid[0]
@@ -222,7 +224,8 @@ for epoch in range(num_train_epochs):
                                                    class_specific=class_specific, coefs=coefs, log=log,
                                                    masking_type=args.masking_type, neptune_run=neptune_run,
                                                    quantized_mask=args.quantized_mask, sim_diff_weight=sim_diff_weight,
-                                                   sim_diff_function=args.sim_diff_function, mixup=args.mixup)
+                                                   sim_diff_function=args.sim_diff_function, mixup=args.mixup,
+                                                   adversarial_training=args.adversarial_training)
     else:
         tnt.joint(model=ppnet_multi, log=log)
         joint_lr_scheduler.step()
@@ -231,7 +234,8 @@ for epoch in range(num_train_epochs):
                                                    class_specific=class_specific, coefs=coefs, log=log,
                                                    masking_type=args.masking_type, neptune_run=neptune_run,
                                                    quantized_mask=args.quantized_mask, sim_diff_weight=sim_diff_weight,
-                                                   sim_diff_function=args.sim_diff_function, mixup=args.mixup)
+                                                   sim_diff_function=args.sim_diff_function, mixup=args.mixup,
+                                                   adversarial_training=args.adversarial_training)
     if neptune_run is not None:
         neptune_run["train/epoch/accuracy"].append(train_accu)
         neptune_run["train/epoch/stage"].append(0.0 if epoch < num_warm_epochs else 1.0)
@@ -296,7 +300,8 @@ for epoch in range(num_train_epochs):
                                                            neptune_run=neptune_run, quantized_mask=args.quantized_mask,
                                                            sim_diff_weight=sim_diff_weight,
                                                            sim_diff_function=args.sim_diff_function,
-                                                           mixup=args.mixup)
+                                                           mixup=args.mixup,
+                                                           adversarial_training=args.adversarial_training)
 
                 if neptune_run is not None:
                     neptune_run["train/epoch/accuracy"].append(train_accu)

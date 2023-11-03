@@ -1,9 +1,10 @@
-import time
 from typing import Tuple
 
 import torch
 import numpy as np
+from cleverhans.torch.attacks.projected_gradient_descent import projected_gradient_descent
 
+from adversarial_attacks.ppnet_wrapper import PPNetAdversarialWrapper
 from helpers import list_of_distances
 from settings import masking_random_prob, img_size
 
@@ -19,7 +20,7 @@ def mixup_data(x: torch.Tensor, y: torch.Tensor, alpha: float = 1.0) -> Tuple[to
 def _train_or_test(model, dataloader, optimizer=None, class_specific=True, use_l1_mask=True,
                    coefs=None, log=print, masking_type='none', neptune_run=None,
                    quantized_mask=False, sim_diff_weight=0.0, sim_diff_function='l1',
-                   mixup: bool = False):
+                   mixup: bool = False, adversarial_training: bool = False):
     '''
     model: the multi-gpu model
     dataloader:
@@ -36,6 +37,11 @@ def _train_or_test(model, dataloader, optimizer=None, class_specific=True, use_l
     total_separation_cost = 0
     total_avg_separation_cost = 0
     total_sim_diff_loss = 0.0
+
+    if adversarial_training:
+        adversarial_wrapper = PPNetAdversarialWrapper(model=model, focal_sim=False)
+    else:
+        adversarial_wrapper = None
 
     for i, (image, label) in enumerate(dataloader):
         input = image.cuda()
@@ -78,6 +84,16 @@ def _train_or_test(model, dataloader, optimizer=None, class_specific=True, use_l
 
                             input[sample_i, top:top + height, left:left + width] = \
                                 possible_modifications[np.random.randint(3)][top:top + height, left:left + width]
+
+            if adversarial_training:
+                input = projected_gradient_descent(
+                    model_fn=adversarial_wrapper,
+                    x=input,
+                    eps=0.4,
+                    eps_iter=0.01,
+                    nb_iter=40,
+                    norm=np.inf,
+                )
 
             output, min_distances, all_similarities = model(input, return_all_similarities=True)
 
@@ -286,13 +302,14 @@ def _train_or_test(model, dataloader, optimizer=None, class_specific=True, use_l
 
 def train(model, dataloader, optimizer, class_specific=False, coefs=None, log=print, masking_type='none',
           neptune_run=None, quantized_mask=False, sim_diff_weight=0.0, sim_diff_function='l1',
-          mixup: bool = True):
+          mixup: bool = True, adversarial_training: bool = False):
     assert (optimizer is not None)
     model.train()
     return _train_or_test(model=model, dataloader=dataloader, optimizer=optimizer,
                           class_specific=class_specific, coefs=coefs, log=log, masking_type=masking_type,
                           neptune_run=neptune_run, quantized_mask=quantized_mask,
-                          sim_diff_function=sim_diff_function, sim_diff_weight=sim_diff_weight, mixup=mixup)
+                          sim_diff_function=sim_diff_function, sim_diff_weight=sim_diff_weight, mixup=mixup,
+                          adversarial_training=adversarial_training)
 
 
 def test(model, dataloader, class_specific=False, log=print, masking_type='none', neptune_run=None,
